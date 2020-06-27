@@ -10,7 +10,7 @@
 		"raylib-d": "~>3.0.2"
 	},
 	"libs": [
-		"raylib"
+		"raylib", "nuklear"
 	],
 	"description": "small 8 bit game from scratch for a game jam from an 8 bit asset pack",
 	"license": "proprietary",

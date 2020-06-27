@@ -1,0 +1,3 @@
+[submodule "external/bindbc-nuklear"]
+	path = external/bindbc-nuklear
+	url = https://github.com/Timu5/bindbc-nuklear
