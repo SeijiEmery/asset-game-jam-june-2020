@@ -56,6 +56,17 @@ class Sprite {
 
 	public @property bool 	 playing () { return activeAnimation != null; }
 
+	this () {}
+	this (ref StaticSpriteAsset sprite) {
+		writefln("Set sprite");
+		setSprite(sprite);
+	}
+	this (ref SpriteAnimation animation, bool loopAnimation = false) {
+		playAnimation(animation, loopAnimation);
+	}
+	Sprite fromAsset (ref StaticSpriteAsset spriteAsset) { return this.setSprite(spriteAsset); }
+	Sprite fromAsset (ref SpriteAnimation animation, bool loopAnimation = false) { return this.playAnimation(animation, loopAnimation); }
+
 	Sprite setPosition (Vector2 position) {
 		this.position = position;
 		return this;
@@ -101,15 +112,12 @@ class Sprite {
 				}
 			}
 			activeSprite = &activeAnimation.frames[animationCurrentFrame];
-			writefln("active animation: %s / %s %s %s", animationCurrentFrame, activeAnimation.frames.length, elapsedTime, currentFrame);
-		} else {
-			writefln("no active animation");
 		}
 		if (activeSprite) {
 			DrawTexture(*activeSprite, cast(int)position.x, cast(int)position.y, WHITE);
 		}
 	}
-	void destroy () { destroyed = true; }
+	void destroy () { destroyed = true; writefln("destroying sprite!!"); }
 }
 
 
@@ -127,7 +135,7 @@ struct SpriteRenderer {
 		}
 	}
 	Sprite create (Args...)(Args args) {
-		Sprite sprite = new Sprite();
+		Sprite sprite = new Sprite(args);
 		sprites ~= sprite;
 		return sprite;
 	}
@@ -138,7 +146,7 @@ void main() {
 	InitWindow(1920, 1080, "Hello, Raylib-D!");
 	Sprites.load();
 
-	SpriteRenderer spriteRenderer;
+	SpriteRenderer sprites;
 	int currentAnimation = 0;
 
 	ref SpriteAnimation getPlayerAnimation (int animation) {
@@ -164,20 +172,30 @@ void main() {
 		}
 	}
 
-	auto playerSprite = spriteRenderer
-		.create
+	auto playerSprite = sprites.create
+		.fromAsset(Sprites.Player.Idle)
 		.setPosition(Vector2(500, 400))
-		.playAnimation(Sprites.Player.Idle, true)
 		.onAnimationEnded(delegate (sprite) { 
 			sprite.playAnimation(getPlayerAnimation(++currentAnimation));
 		});
 
+	auto tree = sprites.create
+		.fromAsset(Sprites.Tree01)
+		.setPosition(Vector2(400, 200));
+
 	while (!WindowShouldClose()) {
-		 BeginDrawing();
-		 ClearBackground(RAYWHITE);
-		 DrawText("Hello, World!", 400, 300, 28, BLACK);
-		 spriteRenderer.render();
-		 EndDrawing();
+		BeginDrawing();
+		ClearBackground(RAYWHITE);
+		DrawText("Hello, World!", 400, 300, 28, BLACK);
+		sprites.render();
+		EndDrawing();
+		if (!IsGamepadAvailable(0)) {
+			writefln("no gamepad present!!");
+		}
+
+		if (IsGamepadAvailable(0) && IsGamepadButtonPressed(0, GamepadButton.GAMEPAD_BUTTON_RIGHT_FACE_UP)) {
+			tree.destroy();
+		}
 	}
 	CloseWindow();
 }
