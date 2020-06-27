@@ -61,7 +61,7 @@ import std.array: array;
 import std.string: toStringz;
 import raylib;
 
-struct AnimatedSpriteAsset {{
+struct SpriteAnimation {{
     string[]    paths;
     Texture[]   frames = null;
     float       animationSpeed = 1f;
@@ -98,13 +98,12 @@ struct StaticSpriteAsset {{
 
 struct Sprites {{
     {static_sprite_decls}
-    {animated_sprite_decls}
 
-    private bool isLoaded = false;
-    @property bool loaded () {{ return isLoaded; }}
-    @property size_t resourceCount () {{ return {all_sprite_count}; }}
+    private static bool isLoaded = false;
+    @property static bool loaded () {{ return isLoaded; }}
+    @property static size_t resourceCount () {{ return {all_sprite_count}; }}
 
-    void load () {{
+    static void load () {{
         isLoaded = true;
         {static_sprite_init}
         {animated_sprite_init}
@@ -118,16 +117,12 @@ struct Sprites {{
         for anim in animated_sprites.values()
     ]),
     static_sprite_decls='\n    '.join([
-        "StaticSpriteAsset {name} = StaticSpriteAsset(\"{path}\");".format(name=name, path=path)
+        "static StaticSpriteAsset {name} = StaticSpriteAsset(\"{path}\");".format(name=name, path=path)
         for name, path in static_sprites.items()
     ]),
     static_sprite_init='\n        '.join([
         "{name}.load();".format(name=name)
         for name, path in static_sprites.items()
-    ]),
-    animated_sprite_decls='\n    '.join([
-        "{name}Sprites {name};".format(name=name)
-        for name in animated_sprites.keys()
     ]),
     animated_sprite_init='\n        '.join([
         '\n        '.join([
@@ -137,12 +132,12 @@ struct Sprites {{
         for name, sprite in animated_sprites.items()
     ]),
     animated_sprite_struct_decls='\n\n'.join(['''
-    struct {name}Sprites {{
+    struct {name} {{
         {sprite_decls}
     }}'''.format(
     name=name,
     sprite_decls='\n        '.join([
-        "AnimatedSpriteAsset {name} = AnimatedSpriteAsset(1f, [\n{frames}\n        ]);".format(
+        "static SpriteAnimation {name} = SpriteAnimation(10f, [\n{frames}\n        ]);".format(
             name=anim, frames=',\n'.join([
                 "            \"{path}\"".format(path=path)
                 for path in frames
@@ -152,7 +147,7 @@ struct Sprites {{
     for name, sprite_anim in animated_sprites.items()
 ])
 )
-print(gen_asset_handling_code())
+# print(gen_asset_handling_code())
 
 
 with open('../source/sprites.d', 'w') as f:

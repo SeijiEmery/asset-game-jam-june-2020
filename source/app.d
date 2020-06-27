@@ -6,6 +6,7 @@ import std.format: format;
 import std.c.stdlib: malloc, free, realloc;
 import sprites;
 import std.stdio;
+import std.functional: toDelegate;
 
 //extern(C) void* nkAlloc (nk_handle handle, void* ptr, size_t size) nothrow @nogc {
 //	return ptr ? malloc(size) : realloc(ptr, size);
@@ -41,26 +42,141 @@ import std.stdio;
 
 //	}
 //}
+
+class Sprite {
+	private Texture* 		 activeSprite = null;
+	private SpriteAnimation* activeAnimation = null;
+	private double 		     animationStartTime = 0;
+	private double 			 animationPlaybackSpeed = 10;
+	private uint 			 animationCurrentFrame = 0;
+	public Vector2 		 	 position = Vector2(0, 0);
+	private bool  		     loopAnimation = false;
+	private bool 		     destroyed = false;
+	private void delegate(Sprite) onSpriteAnimationEnded;
+
+	public @property bool 	 playing () { return activeAnimation != null; }
+
+	Sprite setPosition (Vector2 position) {
+		this.position = position;
+		return this;
+	}
+	Sprite setSprite(ref StaticSpriteAsset spriteAsset) {
+		if (!spriteAsset.loaded) spriteAsset.load();
+		activeSprite = &spriteAsset.sprite;
+		activeAnimation = null;
+		return this;
+	}
+	Sprite playAnimation(ref SpriteAnimation animation, bool loopAnimation = false) {
+		if (!animation.loaded) animation.load();
+		animationStartTime = GetTime();
+		activeSprite = &animation.frames[0];
+		activeAnimation = &animation;
+		animationCurrentFrame = 0;
+		this.loopAnimation = loopAnimation;
+		return this;
+	}
+	Sprite onAnimationEnded(void function(Sprite) onSpriteAnimationEnded) {
+		return onAnimationEnded(toDelegate(onSpriteAnimationEnded));
+	}
+	Sprite onAnimationEnded (void delegate(Sprite) onSpriteAnimationEnded) {
+		this.onSpriteAnimationEnded = onSpriteAnimationEnded;
+		return this;
+	}
+	void draw() {
+		if (activeAnimation) {
+			auto elapsedTime = GetTime() - animationStartTime;
+			auto currentFrame = elapsedTime * activeAnimation.animationSpeed;
+			if (currentFrame < 0) currentFrame = 0;
+
+			animationCurrentFrame = cast(uint)currentFrame;
+			if (animationCurrentFrame >= activeAnimation.frames.length) {
+				animationCurrentFrame = 0;
+				if (loopAnimation) {
+					animationStartTime = GetTime();
+				} else {
+					activeAnimation = null;
+				}
+				if (onSpriteAnimationEnded) {
+					onSpriteAnimationEnded(this);
+				}
+			}
+			activeSprite = &activeAnimation.frames[animationCurrentFrame];
+			writefln("active animation: %s / %s %s %s", animationCurrentFrame, activeAnimation.frames.length, elapsedTime, currentFrame);
+		} else {
+			writefln("no active animation");
+		}
+		if (activeSprite) {
+			DrawTexture(*activeSprite, cast(int)position.x, cast(int)position.y, WHITE);
+		}
+	}
+	void destroy () { destroyed = true; }
+}
+
+
+struct SpriteRenderer {
+	Sprite[] sprites;
+
+	void render () {
+		for (int i = cast(int)sprites.length; i --> 0; ) {
+			if (sprites[i].destroyed) {
+				sprites[i] = sprites[sprites.length - 1];
+				--sprites.length;
+			} else {
+				sprites[i].draw();
+			}
+		}
+	}
+	Sprite create (Args...)(Args args) {
+		Sprite sprite = new Sprite();
+		sprites ~= sprite;
+		return sprite;
+	}
+}
+
+
 void main() {
-	InitWindow(800, 600, "Hello, Raylib-D!");
-	Sprites Sprites;
+	InitWindow(1920, 1080, "Hello, Raylib-D!");
 	Sprites.load();
 
-	auto sprite = Sprites.Player.Roll;
-	double SPEED = 10;
-	//size_t i = 0;
+	SpriteRenderer spriteRenderer;
+	int currentAnimation = 0;
+
+	ref SpriteAnimation getPlayerAnimation (int animation) {
+		final switch (animation % 17) {
+			case 0: return Sprites.Player.Idle;
+			case 1: return Sprites.Player.HitwSword;
+			case 2: return Sprites.Player.Attack03;
+			case 3: return Sprites.Player.TakeSword;
+			case 4: return Sprites.Player.Roll;
+			case 5: return Sprites.Player.Hit;
+			case 6: return Sprites.Player.Attack02;
+			case 7: return Sprites.Player.Death;
+			case 8: return Sprites.Player.PutAwaySword;
+			case 9: return Sprites.Player.RollSword;
+			case 10: return Sprites.Player.RunwSword;
+			case 11: return Sprites.Player.StopAttack;
+			case 12: return Sprites.Player.Parry;
+			case 13: return Sprites.Player.AttackHard;
+			case 14: return Sprites.Player.Attack01;
+			case 15: return Sprites.Player.Run;
+			case 16: return Sprites.Player.ParryWithoutHit;
+			case 17: return Sprites.Player.IdlewSword;
+		}
+	}
+
+	auto playerSprite = spriteRenderer
+		.create
+		.setPosition(Vector2(500, 400))
+		.playAnimation(Sprites.Player.Idle, true)
+		.onAnimationEnded(delegate (sprite) { 
+			sprite.playAnimation(getPlayerAnimation(++currentAnimation));
+		});
 
 	while (!WindowShouldClose()) {
 		 BeginDrawing();
 		 ClearBackground(RAYWHITE);
 		 DrawText("Hello, World!", 400, 300, 28, BLACK);
-
-		 //DrawTextureQuad(sprite.frames[0], Vector2(0, 0), Vector2(400, 300), Rectangle(32,32), WHITE);
-		 size_t i = cast(size_t)(GetTime() * sprite.animationSpeed * SPEED) % sprite.frames.length;
-		 //writefln("%s %s", GetTime(), cast(size_t)GetTime());
-		 DrawTexture(sprite.frames[i], 400, 300, WHITE);
-		 //i = (i + 1) % sprite.frames.length;
-
+		 spriteRenderer.render();
 		 EndDrawing();
 	}
 	CloseWindow();
