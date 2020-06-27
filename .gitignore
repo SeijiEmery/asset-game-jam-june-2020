@@ -13,3 +13,5 @@ agj2020-test-*
 *.o
 *.obj
 *.lst
+assets/sprites/*
+assets/tiles/*
