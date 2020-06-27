@@ -1,6 +1,14 @@
-import std.stdio;
+import raylib;
 
 void main()
 {
-	writeln("Edit source/app.d to start your project.");
+	InitWindow(800, 600, "Hello, Raylib-D!");
+	while (!WindowShouldClose())
+	{
+		BeginDrawing();
+		ClearBackground(RAYWHITE);
+		DrawText("Hello, World!", 400, 300, 28, BLACK);
+		EndDrawing();
+	}
+	CloseWindow();
 }
