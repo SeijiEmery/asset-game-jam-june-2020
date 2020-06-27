@@ -141,10 +141,26 @@ struct SpriteRenderer {
 	}
 }
 
+Vector2 lerp (Vector2 a, Vector2 b, double t) {
+	if (t < 0) t = 0;
+	if (t > 1) t = 1;
+	return Vector2(
+		a.x * (1 - t) + b.x * t,
+		a.y * (1 - t) + b.y * t
+	);
+}
+ref Vector2 lerpTo (ref Vector2 a, Vector2 b, double t) {
+	return a = lerp(a, b, t);
+}
+
 
 void main() {
-	InitWindow(1920, 1080, "Hello, Raylib-D!");
-	Sprites.load();
+	int screenWidth = 1920, screenHeight = 1080;
+
+	InitWindow(screenWidth, screenHeight, "Hello, Raylib-D!");
+	SetTargetFPS(60);
+
+	Sprites.load(); // preload all sprites
 
 	SpriteRenderer sprites;
 	int currentAnimation = 0;
@@ -174,7 +190,7 @@ void main() {
 
 	auto playerSprite = sprites.create
 		.fromAsset(Sprites.Player.Idle)
-		.setPosition(Vector2(500, 400))
+		.setPosition(Vector2(0, 0))
 		.onAnimationEnded(delegate (sprite) { 
 			sprite.playAnimation(getPlayerAnimation(++currentAnimation));
 		});
@@ -183,11 +199,84 @@ void main() {
 		.fromAsset(Sprites.Tree01)
 		.setPosition(Vector2(400, 200));
 
+	Camera2D camera;
+	camera.target = Vector2(0, 0);
+	camera.zoom = 4;
+	camera.rotation = 0;
+	camera.offset = Vector2(screenWidth / 2, screenHeight / 2);
+
+	bool followPlayer = false;
+
 	while (!WindowShouldClose()) {
+
+		double dt = GetFrameTime();
+
+		// camera controls
+		if (IsGamepadAvailable(0)) {
+			auto prevZoom = camera.zoom;
+			camera.zoom += GetFrameTime() * 5.0 * (
+				GetGamepadAxisMovement(0, GamepadAxis.GAMEPAD_AXIS_RIGHT_TRIGGER) -
+				GetGamepadAxisMovement(0, GamepadAxis.GAMEPAD_AXIS_LEFT_TRIGGER)
+			);
+			if (camera.zoom > 10) camera.zoom = 10;
+			if (camera.zoom < 0.5) camera.zoom = 0.5;
+			if (camera.zoom != prevZoom) writefln("set zoom %s", camera.zoom);
+
+
+			double GetStickInput(int gamepad, GamepadAxis axis) {
+				import std.math;
+				double x = GetGamepadAxisMovement(0, axis);
+				double sign = x >= 0 ? +1 : -1;
+				//if (axis == GamepadAxis.GAMEPAD_AXIS_LEFT_Y || axis == GamepadAxis.GAMEPAD_AXIS_RIGHT_Y) {
+				//	sign = -sign;
+				//}
+				x = pow(abs(x), 2.3);
+				return x > 2.5e-2 ? x * sign : 0;
+			}
+
+			camera.target.x += dt * 1000 / camera.zoom * GetStickInput(0, GamepadAxis.GAMEPAD_AXIS_RIGHT_X);
+			camera.target.y += dt * 1000 / camera.zoom * GetStickInput(0, GamepadAxis.GAMEPAD_AXIS_RIGHT_Y);
+
+			//writefln("LS.X %s => %s LS.Y %s => %s RS.X %s => %s RS.Y %s => %s",
+			//	GetGamepadAxisMovement(0, GamepadAxis.GAMEPAD_AXIS_LEFT_X),
+			//	GetStickInput(0, GamepadAxis.GAMEPAD_AXIS_LEFT_X),
+			//	GetGamepadAxisMovement(0, GamepadAxis.GAMEPAD_AXIS_LEFT_Y),
+			//	GetStickInput(0, GamepadAxis.GAMEPAD_AXIS_LEFT_Y),
+			//	GetGamepadAxisMovement(0, GamepadAxis.GAMEPAD_AXIS_RIGHT_X),
+			//	GetStickInput(0, GamepadAxis.GAMEPAD_AXIS_RIGHT_X),
+			//	GetGamepadAxisMovement(0, GamepadAxis.GAMEPAD_AXIS_RIGHT_Y),
+			//	GetStickInput(0, GamepadAxis.GAMEPAD_AXIS_RIGHT_Y),
+			//);
+
+			//writefln("LS.X %s LS.Y %s RS.X %s RS.Y %s",
+			//	GetStickInput(0, GamepadAxis.GAMEPAD_AXIS_LEFT_X),
+			//	GetStickInput(0, GamepadAxis.GAMEPAD_AXIS_LEFT_Y),
+			//	GetStickInput(0, GamepadAxis.GAMEPAD_AXIS_RIGHT_X),
+			//	GetStickInput(0, GamepadAxis.GAMEPAD_AXIS_RIGHT_Y),
+			//);
+
+			if (IsGamepadButtonPressed(0, GamepadButton.GAMEPAD_BUTTON_RIGHT_THUMB)) {
+				camera.target = playerSprite.position;
+			}
+			if (IsGamepadButtonPressed(0, GamepadButton.GAMEPAD_BUTTON_LEFT_THUMB)) {
+				followPlayer = !followPlayer;
+			}
+		}
+		//writefln("camera target: %s", camera.target);
+		if (followPlayer) {
+			camera.target.lerpTo(Vector2(
+				playerSprite.position.x,
+				playerSprite.position.y), dt * 4);
+		}
+		
 		BeginDrawing();
+		
 		ClearBackground(RAYWHITE);
 		DrawText("Hello, World!", 400, 300, 28, BLACK);
+		
+		BeginMode2D(camera);
 		sprites.render();
+		EndMode2D();
 		EndDrawing();
 		if (!IsGamepadAvailable(0)) {
 			writefln("no gamepad present!!");
@@ -196,6 +285,8 @@ void main() {
 		if (IsGamepadAvailable(0) && IsGamepadButtonPressed(0, GamepadButton.GAMEPAD_BUTTON_RIGHT_FACE_UP)) {
 			tree.destroy();
 		}
+
+
 	}
 	CloseWindow();
 }
