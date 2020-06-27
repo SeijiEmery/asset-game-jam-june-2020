@@ -1,0 +1,15 @@
+{
+	"authors": [
+		"Seiji Emery"
+	],
+	"copyright": "Copyright © 2020, Seiji Emery",
+	"dependencies": {
+		"bindbc-loader": "~>0.2.1",
+		"bindbc-glfw": "~>0.9.0",
+		"bindbc-nuklear": "~>0.4.3",
+		"bindbc-raylib": "~>0.5.0"
+	},
+	"description": "small 8 bit game from scratch for a game jam from an 8 bit asset pack",
+	"license": "proprietary",
+	"name": "agj2020"
+}

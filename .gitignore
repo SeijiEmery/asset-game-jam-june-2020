@@ -1,0 +1,15 @@
+.dub
+docs.json
+__dummy.html
+docs/
+/agj2020
+agj2020.so
+agj2020.dylib
+agj2020.dll
+agj2020.a
+agj2020.lib
+agj2020-test-*
+*.exe
+*.o
+*.obj
+*.lst
