@@ -1,10 +1,10 @@
 import raylib;
-import sprites;
 import std.stdio;
 import agj.sprite: Sprite, SpriteRenderer;
 import agj.game.camera;
 import agj.game.player;
 import agj.game.utils;
+import sprites;
 
 
 void main() {
@@ -12,18 +12,12 @@ void main() {
     InitWindow(screenWidth, screenHeight, "asset game jam");
     SetTargetFPS(60);
 
-    Sprites.load(); // preload all sprites
- 
-    SpriteRenderer sprites;
-    Sprites.Player.Roll.animationSpeed = 25;
-    auto player = Player(sprites);
+    // preload all assets
+    //Sprites.load();
 
-    Camera2D camera;
-    camera.target = Vector2(0, 0);
-    camera.zoom = 4;
-    camera.rotation = 0;
-    camera.offset = Vector2(screenWidth / 2, screenHeight / 2);
-    CameraControllerState cameraControlState;
+    SpriteRenderer sprites;
+    auto player = Player(sprites);
+    auto cam = CameraController(player, screenWidth, screenHeight);
 
     Texture2D tiles = LoadTexture("assets/tiles/cavesofgallet.png");
     //Texture2D tiles = LoadTexture("assets/tiles/tiles.png");
@@ -34,7 +28,7 @@ void main() {
 
     while (!WindowShouldClose()) {
         player.update();
-        camera.update(player, cameraControlState);
+        cam.update();
 
         // sprite destruction test
         if (IsGamepadAvailable(0) && IsGamepadButtonPressed(0, GamepadButton.GAMEPAD_BUTTON_RIGHT_FACE_UP)) {
@@ -45,6 +39,7 @@ void main() {
         ClearBackground(BLACK);
 
         // draw test background
+        auto camera = cam.camera;
         Camera2D backgroundCam = camera;
         const int FOREGROUND_BACKGROUND_SCALE = 2;
         backgroundCam.zoom *= FOREGROUND_BACKGROUND_SCALE;

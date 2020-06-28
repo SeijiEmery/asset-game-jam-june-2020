@@ -1,11 +1,8 @@
 import raylib;
 import std.exception: enforce;
 import std.format: format;
-import std.c.stdlib: malloc, free, realloc;
 import sprites;
 import std.stdio;
-import std.functional: toDelegate;
-import std.string: toStringz;
 import agj.ui;
 import agj.sprite: Sprite, SpriteRenderer;
 import agj.game.camera;
@@ -23,19 +20,8 @@ void main() {
 	Sprites.load(); // preload all sprites
  
 	SpriteRenderer sprites;
-	int currentAnimation = 0;
-
-	Sprites.Player.Roll.animationSpeed = 25;
-
 	auto player = Player(sprites);
-
-	Camera2D camera;
-	camera.target = Vector2(0, 0);
-	camera.zoom = 4;
-	camera.rotation = 0;
-	camera.offset = Vector2(screenWidth / 2, screenHeight / 2);
-	CameraControllerState cameraControlState;
-
+	auto cam = CameraController(player, screenWidth, screenHeight);
 	auto tileEditor = new TileEditor();
 
 	if (!IsGamepadAvailable(0)) {
@@ -47,11 +33,11 @@ void main() {
 		tileEditor.renderUI();
 
 		player.update();
-		camera.update(player, cameraControlState);
+		cam.update();
 
 		BeginDrawing();
-		
 		ClearBackground(BLACK);
+		auto camera = cam.camera;
 
 		// draw sprites
 		sprites.render(camera);

@@ -5,14 +5,26 @@ import agj.ui: MouseUI;
 import std.stdio: writefln;
 
 
-struct CameraControllerState {
+struct CameraController {
+    Camera2D camera;
     bool followPlayer;
     bool isDraggingCamera;
     Vector2 dragStartPos;
+    Player* player;
+
+    this (ref Player player, int screenWidth, int screenHeight) {
+        this.player = &player;
+        camera.target = Vector2(0, 0);
+        camera.zoom = 4;
+        camera.rotation = 0;
+        camera.offset = Vector2(screenWidth / 2, screenHeight / 2);
+    }
 }
 
 // update camera controls
-void update (ref Camera2D camera, ref Player player, ref CameraControllerState state) {
+void update (ref CameraController state) {
+    Player* player = state.player;
+    Camera2D* camera = &state.camera;
     double dt = GetFrameTime();
 
     // camera controls

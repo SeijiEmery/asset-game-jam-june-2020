@@ -82,6 +82,7 @@ struct Player {
     double dodgeRollDirection = 1;
 
     this (ref SpriteRenderer renderer) {
+        Sprites.Player.Roll.animationSpeed = 25;
         sprite = renderer.create
             .fromAsset(Sprites.Player.Idle, false)
             .setPosition(Vector2(0, 0))
