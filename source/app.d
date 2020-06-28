@@ -366,11 +366,16 @@ struct Player {
 }
 
 enum TileLayerFlag : ubyte {
-	Wall 		= 1 << 0,
-	Ladder 		= 1 << 1,
-	Water 		= 1 << 2,
-	Platform 	= 1 << 3,
-	Support 	= 1 << 4,
+	Write 		= 1 << 0,
+	Wall 		= 1 << 1,
+	Ladder 		= 1 << 2,
+	Water 		= 1 << 3,
+	Platform 	= 1 << 4,
+	Support 	= 1 << 5,
+}
+
+enum TileLayer {
+	None, Air, Wall, Ladder, Fluid, FluidStream, Platform, PlatformSupport, Vegetation,
 }
 
 struct AABB(T) {
@@ -386,8 +391,8 @@ struct AABB(T) {
 		} else {
 			if (x < minBoundX) minBoundX = x;
 			if (x > maxBoundX) maxBoundX = x;
-			if (y < minBoundX) minBoundX = y;
-			if (y > maxBoundX) maxBoundX = y;
+			if (y < minBoundY) minBoundY = y;
+			if (y > maxBoundY) maxBoundY = y;
 		}
 	}
 }
@@ -414,6 +419,7 @@ class TileMap(T = ubyte) {
 	public AABB!int chunkBounds;
 
 	private ref TileChunk!T getChunk (TileIndex index) {
+		//writefln("getting chunk %s", index);
 		if (index !in chunks) {
 			chunkBounds.grow(index.x, index.y);
 			chunks[index] = TileChunk!T();
@@ -422,9 +428,19 @@ class TileMap(T = ubyte) {
 	}
 	ref T get (int i, int j) {
 		bounds.grow(i, j);
-		return getChunk(TileIndex(i / 64, j / 64)).get(cast(uint)(i % 64), cast(uint)(j % 64));
+
+		auto chunkIndex = TileIndex(i >> 6, j >> 6);
+		auto tileIndex  = TileIndex(i & 63, j & 63);
+
+		//writefln("tile access: %s %s => %s %s", i, j, chunkIndex, tileIndex);
+		
+		return getChunk(chunkIndex).get(cast(uint)tileIndex.x, cast(uint)tileIndex.y);
 	}
 	void getTileBoundsFromScreenCoords(Rectangle screen, ref const(Camera2D) camera, out TileIndex minima, out TileIndex maxima) {
+		if (!bounds.initialized) {
+			minima = maxima = TileIndex(0, 0);
+		}
+
 		minima = screenToTileCoords(Vector2(screen.x, screen.y), camera);
 		if (minima.x > bounds.minBoundX) minima.x = bounds.minBoundX;
 		if (maxima.x < bounds.maxBoundX) maxima.x = bounds.maxBoundX;
@@ -450,7 +466,7 @@ TileIndex screenToTileCoords (Vector2 screenPos, ref const(Camera2D) camera) {
 class TileRenderer {
 	private Texture2D 		texture;
 	private size_t 	  		tileCount;
-	private auto   			roomBoundsMap = new TileMap!ubyte();
+	private auto   			roomLayerMap  = new TileMap!TileLayer();
 	private auto 			drawnTileMap  = new TileMap!ubyte();
 
 	this () { 
@@ -485,8 +501,37 @@ class TileRenderer {
 		auto fixedTilePos = TileIndex(1, 1).tileToWorldCoords();
 		msg ~= format("\nworld coords of tile (1,1): %s %s", fixedTilePos.x, fixedTilePos.y);
 
-		DrawText(msg.toStringz, 0, 0, 16, GOLD);
+
+		// do tile edits (okay, shouldn't really be in a render function, but whatever...)
+		if (IsMouseButtonDown(MouseButton.MOUSE_LEFT_BUTTON)) {
+			roomLayerMap.get(selectedTile.x, selectedTile.y) = TileLayer.Wall;
+		} else if (IsMouseButtonDown(MouseButton.MOUSE_RIGHT_BUTTON)) {
+			roomLayerMap.get(selectedTile.x, selectedTile.y) = TileLayer.None;
+		}
+
 		BeginMode2D(camera);
+
+		// draw tile layers
+		TileIndex i0, i1;
+		roomLayerMap.getTileBoundsFromScreenCoords(Rectangle(0, 1080, 1920, 1080), camera, i0, i1);
+
+		msg ~= format("\ngot bounds: %s %s", i0, i1);
+		msg ~= format("\nbounds: %s", roomLayerMap.bounds);
+		msg ~= format("\nchunk bounds: %s", roomLayerMap.chunkBounds);
+
+		for (int i = i0.x; i < i1.x; ++i) {
+			for (int j = i0.y; j < i1.y; ++j) {
+				auto tile = roomLayerMap.get(i, j);
+				switch (tile) {
+					case TileLayer.Wall: DrawRectangleV(tileToWorldCoords(TileIndex(i, j)), Vector2(8, 8), PURPLE); break;
+					case TileLayer.Air: DrawRectangleV(tileToWorldCoords(TileIndex(i, j)), Vector2(8, 8), LIME); break;
+					default:
+				}
+			}
+		}
+		auto w0 = i0.tileToWorldCoords;
+		auto w1 = i1.tileToWorldCoords;
+		DrawRectangleLinesEx(Rectangle(w0.x, w0.y, w1.x - w0.x, w1.y - w0.y), 1, WHITE);
 
 		// draw tile debug
 		auto tilePos = selectedTile.tileToWorldCoords();
@@ -497,6 +542,9 @@ class TileRenderer {
 		DrawRectangleV(Vector2(cast(double)cast(int)worldPos.x, cast(double)cast(int)worldPos.y), Vector2(1, 1), RED);
 
 		EndMode2D();
+
+		DrawText(msg.toStringz, 0, 0, 16, GOLD);
+
 	}
 
 }
@@ -556,14 +604,13 @@ void main() {
 		// draw background...?
 		Camera2D backgroundCam = camera;
 
-		const int FOREGROUND_BACKGROUND_SCALE = 2;
-
-		backgroundCam.zoom *= FOREGROUND_BACKGROUND_SCALE;
-		backgroundCam.target.x /= FOREGROUND_BACKGROUND_SCALE;
-		backgroundCam.target.y /= FOREGROUND_BACKGROUND_SCALE;
-		BeginMode2D(backgroundCam);
-		DrawTexture(tiles, 0, 0, WHITE);
-		EndMode2D();
+		//const int FOREGROUND_BACKGROUND_SCALE = 2;
+		//backgroundCam.zoom *= FOREGROUND_BACKGROUND_SCALE;
+		//backgroundCam.target.x /= FOREGROUND_BACKGROUND_SCALE;
+		//backgroundCam.target.y /= FOREGROUND_BACKGROUND_SCALE;
+		//BeginMode2D(backgroundCam);
+		//DrawTexture(tiles, 0, 0, WHITE);
+		//EndMode2D();
 
 		tileRenderer.render(camera);
 
