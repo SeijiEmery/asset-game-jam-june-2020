@@ -500,9 +500,9 @@ class TileRenderer {
 
 
 		// do tile edits (okay, shouldn't really be in a render function, but whatever...)
-		if (IsMouseButtonDown(MouseButton.MOUSE_LEFT_BUTTON)) {
+		if (MouseUI.buttonDown(MouseButton.MOUSE_LEFT_BUTTON)) {
 			roomLayerMap.get(selectedTile.x, selectedTile.y) = TileLayer.Wall;
-		} else if (IsMouseButtonDown(MouseButton.MOUSE_RIGHT_BUTTON)) {
+		} else if (MouseUI.buttonDown(MouseButton.MOUSE_RIGHT_BUTTON)) {
 			roomLayerMap.get(selectedTile.x, selectedTile.y) = TileLayer.None;
 		}
 
@@ -547,6 +547,7 @@ class TileRenderer {
 }
 
 struct MouseUI {
+	enum Result { None, Mouseover, Pressed, BeginDrag }
 	private static bool 		   handled = false;
 	private static bool 		   dragActive = false;
 	private static MouseButton 	   activeDragButton;
@@ -563,32 +564,128 @@ struct MouseUI {
 			handled = true;
 		}
 	}
-	public static bool pressed (MouseButton button) {
-		if (handled) return false;
+	public static Result pressed (MouseButton button) {
+		if (handled) return Result.None;
 		if (IsMouseButtonPressed(button)) {
 			handled = true;
-			return true;
+			return Result.Pressed;
 		}
-		return false;
+		return Result.None;
 	}
-	public static bool pressedOver (MouseButton button, Rectangle screenRect) {
-		return CheckCollisionPointRec(Vector2(GetMouseX(), GetMouseY()), screenRect) && pressed(button);
+	public static Result buttonDown (MouseButton button) {
+		return !handled && IsMouseButtonDown(button) ? Result.Pressed : Result.None;
 	}
-	public static bool beginDrag (MouseButton button, void delegate() onUpdate, void delegate() onEnd) {
-		if (handled) return false;
-		if (IsMouseButtonDown(button)) {
+	public static Result pressedOver (MouseButton button, Rectangle screenRect) {
+		if (handled) return Result.None;
+		if (!CheckCollisionPointRec(Vector2(GetMouseX(), GetMouseY()), screenRect)) return Result.None;
+		auto result = pressed(button);
+		if (result == Result.None) { handled = true; return Result.Mouseover; }
+		return result;
+	}
+	public static Result beginDrag (MouseButton button, void delegate() onUpdate, void delegate() onEnd) {
+		if (handled) return Result.None;
+		if (IsMouseButtonPressed(button)) {
 			handled = dragActive = true;
 			activeDragButton = button;
 			onDragUpdate = onUpdate;
 			onDragEnd = onEnd;
-			return true;
+			return Result.BeginDrag;
 		}
-		return false;
+		return Result.None;
 	}
-	public static bool beginDragOver (MouseButton button, Rectangle screenRect, void delegate() onUpdate, void delegate() onEnd) {
-		return CheckCollisionPointRec(Vector2(GetMouseX(), GetMouseY()), screenRect) && beginDrag(button, onUpdate, onEnd);
+	public static Result beginDragOver (MouseButton button, Rectangle screenRect, void delegate() onUpdate, void delegate() onEnd) {
+		if (handled) return Result.None;
+		if (!CheckCollisionPointRec(Vector2(GetMouseX(), GetMouseY()), screenRect)) return Result.None;
+		auto result = beginDrag(button, onUpdate, onEnd);
+		if (result == Result.None) { handled = true; return Result.Mouseover; }
+		return result;
 	}
 }
+
+void lighten (ref Color color, ubyte amount = 10, ubyte max = 255) {
+	if (cast(uint)color.r + amount < ubyte.max) color.r += amount; else color.r = ubyte.max;
+	if (cast(uint)color.g + amount < ubyte.max) color.g += amount; else color.g = ubyte.max;
+	if (cast(uint)color.b + amount < ubyte.max) color.b += amount; else color.b = ubyte.max;
+}
+
+struct GUIPanel {
+	public Vector2 	position = Vector2(0, 0);
+	public int 		width = 0;
+	private Rectangle layout;
+	private GUIRect[] elements;
+	private Vector2   dragStartPos = Vector2(0, 0);
+	public bool moveable = true;
+	private bool hasMouseover = false;
+	public Color color = GRAY;
+
+	public void beginUI () {
+		layout.x = position.x + 6;
+		layout.y = position.y + 24;
+		layout.width = width - 12;
+		layout.height = 30;
+		elements.length = 0;
+		hasMouseover = false;
+	}
+	public void endUI () {
+		layout.x = position.x;
+		layout.y = position.y;
+		layout.width = width;
+		if (moveable) {
+			switch (MouseUI.beginDragOver(MouseButton.MOUSE_LEFT_BUTTON, layout, &updateDrag, null)) {
+				case MouseUI.Result.BeginDrag: dragStartPos = Vector2(GetMouseX(), GetMouseY()); break;
+				case MouseUI.Result.Mouseover: hasMouseover = true; break;
+				default:
+			}
+		}
+	}
+	private void updateDrag() {
+		position.x += GetMouseX() - dragStartPos.x;
+		position.y += GetMouseY() - dragStartPos.y;
+		dragStartPos = Vector2(GetMouseX(), GetMouseY());
+	}
+	public Rectangle textRect (string text, Color textColor = WHITE, Color backgroundColor = BLACK) {
+		Rectangle rect = layout;
+		rect.height = 25;
+		layout.y += 32;
+		layout.height += 28;
+		elements ~= GUIRect(text, rect, textColor, backgroundColor);
+		return rect;
+	}
+	public bool button (string text, Color textColor = WHITE, Color backgroundColor = BLACK) {
+		auto rect = textRect(text, textColor, backgroundColor);
+		switch (MouseUI.pressedOver(MouseButton.MOUSE_LEFT_BUTTON, rect)) {
+			case MouseUI.Result.Pressed:
+				lighten(elements[$-1].backgroundColor, 10);
+				return true;
+			case MouseUI.Result.Mouseover:
+				lighten(elements[$-1].backgroundColor, 30);
+				return false;
+			default:
+				return false;
+		}
+	}
+	public void draw() {
+		Color tempColor = color;
+		if (hasMouseover) lighten(tempColor, 30);
+		DrawRectangleRec(layout, tempColor);
+		foreach (element; elements) {
+			DrawRectangleRec(element.rect, element.backgroundColor);
+
+			int textWidth = MeasureText(element.text.toStringz, 16);
+			int width = cast(int)element.rect.width - 8;
+			int excessHalfWidth = width > textWidth ? (width - textWidth) / 2 : 0;
+			DrawText(element.text.toStringz, cast(int)element.rect.x + 4 + excessHalfWidth, cast(int)element.rect.y + 4, 16, element.textColor);
+		}
+	}
+}
+
+struct GUIRect {
+	string 			text;
+	Rectangle 		rect;
+	Color 			textColor;
+	Color 			backgroundColor;
+}
+
 
 void main() {
 	int screenWidth = 1920, screenHeight = 1080;
@@ -618,13 +715,28 @@ void main() {
 	Texture2D tiles = LoadTexture("assets/tiles/cavesofgallet.png");
 	//Texture2D tiles = LoadTexture("assets/tiles/tiles.png");
 
+	GUIPanel panelTest;
+	panelTest.position = Vector2(0, 0);
+	panelTest.width = 200;
+
 	// test
 	auto tree = sprites.create
 		.fromAsset(Sprites.Tree01)
 		.setPosition(Vector2(400, 200));
 
+	if (!IsGamepadAvailable(0)) {
+		writefln("no gamepad present!!");
+	}
+
 	while (!WindowShouldClose()) {
 		MouseUI.beginFrame();
+
+		panelTest.beginUI();
+		panelTest.textRect("hello world!");
+		if (panelTest.button("click me!")) {
+
+		}
+		panelTest.endUI();
 
 		player.update();
 		camera.update(player, cameraControlState);
@@ -632,9 +744,6 @@ void main() {
 		// sprite destruction test
 		if (IsGamepadAvailable(0) && IsGamepadButtonPressed(0, GamepadButton.GAMEPAD_BUTTON_RIGHT_FACE_UP)) {
 			tree.destroy();
-		}
-		if (!IsGamepadAvailable(0)) {
-			writefln("no gamepad present!!");
 		}
 		
 		BeginDrawing();
@@ -659,6 +768,9 @@ void main() {
 
 		// draw sprites
 		sprites.render(camera);
+
+		// draw UI on top of everything else
+		panelTest.draw();
 
 		EndDrawing();
 	}
