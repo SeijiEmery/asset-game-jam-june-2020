@@ -12,6 +12,15 @@
 	"libs": [
 		"raylib", "nuklear"
 	],
+	"subPackages": [
+		{
+			"name": "mapgen",
+			"targetType": "executable",
+			"mainSourceFile": "source/mapgen.d",
+			"sourcePaths": ["source"],
+			"importPaths": ["source"],
+		}
+	],
 	"description": "small 8 bit game from scratch for a game jam from an 8 bit asset pack",
 	"license": "proprietary",
 	"name": "agj2020"
