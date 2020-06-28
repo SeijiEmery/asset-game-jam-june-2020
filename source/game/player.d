@@ -86,6 +86,7 @@ struct Player {
         sprite = renderer.create
             .fromAsset(Sprites.Player.Idle, false)
             .setPosition(Vector2(0, 0))
+            .setDepth(1000)
             .onAnimationEnded(&this.onAnimationEnded)
             .setCenterOffset(Vector2(10, 0))
         ;

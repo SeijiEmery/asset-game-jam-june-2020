@@ -35,5 +35,10 @@
 			"targetType": "executable",
 			"mainSourceFile": "tests/ui_test.d",
 		},
+		{
+			"name": "palletize",
+			"targetType": "executable",
+			"mainSourceFile": "tests/palletize.d",
+		},
 	]
 }
