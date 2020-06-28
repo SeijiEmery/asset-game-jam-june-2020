@@ -23,17 +23,10 @@ Small platformer / roguelike built from scratch (hopefully) over a weekend using
 ```bash
 brew install dub dmd raylib
 ./setup.sh
-dub run
+dub run --config=editor
 ```
 if you don't have brew, install it at https://brew.sh
 
 ## Additional notes:
 
 This is currently a work in progress, so check back later!
-
-
-
-
-
-
-

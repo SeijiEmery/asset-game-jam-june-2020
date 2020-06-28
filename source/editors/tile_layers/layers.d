@@ -1,4 +1,5 @@
 module agj.editors.tile_layers.layers;
+import raylib;
 
 enum TileLayerFlag : ubyte {
     Write       = 1 << 0,

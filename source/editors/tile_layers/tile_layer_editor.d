@@ -1,4 +1,9 @@
 module agj.editors.tile_layers.tile_layer_editor;
+import agj.editors.tile_layers.layers;
+import agj.tilemap;
+import agj.ui;
+import std.stdio: writefln;
+import raylib;
 
 class TileEditor {
     private GUIPanel toolsPanel;

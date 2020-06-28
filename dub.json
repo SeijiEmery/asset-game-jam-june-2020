@@ -19,17 +19,21 @@
 	],
 	"license": "proprietary",
 	"name": "agj2020",
-	"subPackages": [
+	"configurations": [
 		{
-			"importPaths": [
-				"source"
-			],
-			"mainSourceFile": "source/mapgen.d",
-			"name": "mapgen",
-			"sourcePaths": [
-				"source"
-			],
-			"targetType": "executable"
-		}
+			"name": "editor",
+			"targetType": "executable",
+			"mainSourceFile": "tests/editor.d",
+		},
+		{
+			"name": "sprite-test",
+			"targetType": "executable",
+			"mainSourceFile": "tests/sprite_test.d",
+		},
+		{
+			"name": "ui-test",
+			"targetType": "executable",
+			"mainSourceFile": "tests/ui_test.d",
+		},
 	]
 }
