@@ -132,7 +132,7 @@ class Sprite {
 			auto w = activeSprite.width, h = activeSprite.height;
 			auto srcRect = Rectangle(0, 0, w, h);
 			auto dstRect = srcRect;
-			
+
 			Vector2 pos = position;
 			if (flipX) {
 				srcRect.w = -w;
@@ -142,7 +142,7 @@ class Sprite {
 				pos.x -= centerOffset.x;
 			}
 			DrawTexturePro(*activeSprite, srcRect, dstRect, pos, 0, WHITE);
-			DrawRectangleLines(-cast(int)position.x, -cast(int)position.y, cast(int)w, cast(int)h, WHITE);
+			//DrawRectangleLines(-cast(int)position.x, -cast(int)position.y, cast(int)w, cast(int)h, WHITE);
 		}
 	}
 	void destroy () { destroyed = true; writefln("destroying sprite!!"); }
@@ -240,8 +240,8 @@ void update (ref Camera2D camera, ref Player player, ref bool followPlayer) {
 	//writefln("camera target: %s", camera.target);
 	if (followPlayer) {
 		camera.target.lerpTo(Vector2(
-			player.sprite.position.x,
-			player.sprite.position.y), dt * 4);
+			-player.sprite.position.x,
+			-player.sprite.position.y), dt * 4);
 	}
 }
 
@@ -307,6 +307,7 @@ void update (ref Player player) {
 		if (moving) {
 			player.sprite.position.x += moveInput * dt * 150;
 		}
+		player.sprite.position.y -= GetStickInput(0, GamepadAxis.GAMEPAD_AXIS_LEFT_Y) * dt * 150;
 	}
 	player.sprite.setCenterOffset(Vector2(5, 0));
 }
@@ -366,7 +367,7 @@ struct Player {
 void main() {
 	int screenWidth = 1920, screenHeight = 1080;
 
-	InitWindow(screenWidth, screenHeight, "Hello, Raylib-D!");
+	InitWindow(screenWidth, screenHeight, "asset game jam");
 	SetTargetFPS(60);
 
 	Sprites.load(); // preload all sprites
@@ -384,6 +385,9 @@ void main() {
 	camera.rotation = 0;
 	camera.offset = Vector2(screenWidth / 2, screenHeight / 2);
 	bool followPlayer = false;
+
+	Texture2D tiles = LoadTexture("assets/tiles/cavesofgallet.png");
+	//Texture2D tiles = LoadTexture("assets/tiles/tiles.png");
 
 	// test
 	auto tree = sprites.create
@@ -410,7 +414,16 @@ void main() {
 		DrawText("Hello, World!", 400, 300, 28, BLACK);
 		
 		// draw background...?
+		Camera2D backgroundCam = camera;
 
+		const int FOREGROUND_BACKGROUND_SCALE = 2;
+
+		backgroundCam.zoom *= FOREGROUND_BACKGROUND_SCALE;
+		backgroundCam.target.x /= FOREGROUND_BACKGROUND_SCALE;
+		backgroundCam.target.y /= FOREGROUND_BACKGROUND_SCALE;
+		BeginMode2D(backgroundCam);
+		DrawTexture(tiles, 0, 0, WHITE);
+		EndMode2D();
 
 		// draw sprites
 		sprites.render(camera);
