@@ -7,6 +7,7 @@ import std.c.stdlib: malloc, free, realloc;
 import sprites;
 import std.stdio;
 import std.functional: toDelegate;
+import std.string: toStringz;
 
 //extern(C) void* nkAlloc (nk_handle handle, void* ptr, size_t size) nothrow @nogc {
 //	return ptr ? malloc(size) : realloc(ptr, size);
@@ -364,6 +365,142 @@ struct Player {
 	}	
 }
 
+enum TileLayerFlag : ubyte {
+	Wall 		= 1 << 0,
+	Ladder 		= 1 << 1,
+	Water 		= 1 << 2,
+	Platform 	= 1 << 3,
+	Support 	= 1 << 4,
+}
+
+struct AABB(T) {
+	T minBoundX, maxBoundX;
+	T minBoundY, maxBoundY;
+	bool initialized = false;
+
+	void grow (T x, T y) {
+		if (!initialized) {
+			initialized = true;
+			minBoundX = maxBoundX = x;
+			minBoundY = maxBoundY = y;
+		} else {
+			if (x < minBoundX) minBoundX = x;
+			if (x > maxBoundX) maxBoundX = x;
+			if (y < minBoundX) minBoundX = y;
+			if (y > maxBoundX) maxBoundX = y;
+		}
+	}
+}
+
+
+
+// 64 x 64 chunks
+struct TileChunk(T = ubyte) {
+	T[4096] data;
+	AABB!uint bounds;
+
+	ref T get (uint i, uint j) {
+		enforce(i < 64 && j < 64, format("indices out of range: %s, %s", i, j));
+		bounds.grow(i, j);
+		return data[i + j * 64];
+	}
+}
+
+struct TileIndex { int x; int y; }
+
+class TileMap(T = ubyte) {
+	private TileChunk!T[TileIndex] chunks;
+	public AABB!int bounds;
+	public AABB!int chunkBounds;
+
+	private ref TileChunk!T getChunk (TileIndex index) {
+		if (index !in chunks) {
+			chunkBounds.grow(index.x, index.y);
+			chunks[index] = TileChunk!T();
+		}
+		return chunks[index];
+	}
+	ref T get (int i, int j) {
+		bounds.grow(i, j);
+		return getChunk(TileIndex(i / 64, j / 64)).get(cast(uint)(i % 64), cast(uint)(j % 64));
+	}
+	void getTileBoundsFromScreenCoords(Rectangle screen, ref const(Camera2D) camera, out TileIndex minima, out TileIndex maxima) {
+		minima = screenToTileCoords(Vector2(screen.x, screen.y), camera);
+		if (minima.x > bounds.minBoundX) minima.x = bounds.minBoundX;
+		if (maxima.x < bounds.maxBoundX) maxima.x = bounds.maxBoundX;
+		if (minima.y > bounds.minBoundY) minima.y = bounds.minBoundY;
+		if (maxima.y < bounds.maxBoundY) maxima.y = bounds.maxBoundY;
+		maxima = screenToTileCoords(Vector2(screen.x + screen.width, screen.y + screen.y), camera);
+	}
+}
+
+Vector2 tileToWorldCoords (TileIndex index) {
+	return Vector2(index.x * 8.0, index.y * 8.0);
+}
+Vector2 tileToScreenCoords (TileIndex index, ref const(Camera2D) camera) {
+	return GetWorldToScreen2D(tileToWorldCoords(index), camera);
+}
+TileIndex worldToTileCoords (Vector2 worldPos) {
+	return TileIndex(cast(int)(worldPos.x / 8), cast(int)(worldPos.y / 8));
+}
+TileIndex screenToTileCoords (Vector2 screenPos, ref const(Camera2D) camera) {
+	return worldToTileCoords(GetScreenToWorld2D(screenPos, camera));
+}
+
+class TileRenderer {
+	private Texture2D 		texture;
+	private size_t 	  		tileCount;
+	private auto   			roomBoundsMap = new TileMap!ubyte();
+	private auto 			drawnTileMap  = new TileMap!ubyte();
+
+	this () { 
+		texture = LoadTexture("assets/tiles/tiles.png");
+		tileCount = (texture.width / 8) * (texture.height / 8);
+		writefln("loaded tileset: %s x %s (%s tiles x %s tiles = %s tiles)", 
+			texture.width, texture.height,
+			texture.width / 8, texture.height / 8,
+			texture.width * texture.height / 64);
+	}
+
+	void render (Camera2D camera) {
+		const int FOREGROUND_BACKGROUND_SCALE = 2;
+		camera.zoom *= FOREGROUND_BACKGROUND_SCALE;
+		camera.target.x /= FOREGROUND_BACKGROUND_SCALE;
+		camera.target.y /= FOREGROUND_BACKGROUND_SCALE;
+
+		auto mousePos = Vector2(GetMouseX(), GetMouseY());
+		auto selectedTile = mousePos.screenToTileCoords(camera);
+
+		string msg = format("mouse pos: %s %s", mousePos.x, mousePos.y);
+		auto worldPos = GetScreenToWorld2D(mousePos, camera);
+		msg ~= format("\nworld pos: %s %s", worldPos.x, worldPos.y);
+		msg ~= format("\ntile pos: %s %s", selectedTile.x, selectedTile.y);
+
+		auto tileWorldPos = selectedTile.tileToWorldCoords();
+		msg ~= format("\nworld pos: %s %s", tileWorldPos.x, tileWorldPos.y);
+
+		auto tileScreenPos = selectedTile.tileToScreenCoords(camera);
+		msg ~= format("\nscreen pos: %s %s", tileScreenPos.x, tileScreenPos.y);
+
+		auto fixedTilePos = TileIndex(1, 1).tileToWorldCoords();
+		msg ~= format("\nworld coords of tile (1,1): %s %s", fixedTilePos.x, fixedTilePos.y);
+
+		DrawText(msg.toStringz, 0, 0, 16, GOLD);
+		BeginMode2D(camera);
+
+		// draw tile debug
+		auto tilePos = selectedTile.tileToWorldCoords();
+		DrawRectangleV(tilePos, Vector2(8, 8), ORANGE);
+		DrawRectangleV(fixedTilePos, Vector2(8, 8), GREEN);
+
+		// draw pixel debug
+		DrawRectangleV(Vector2(cast(double)cast(int)worldPos.x, cast(double)cast(int)worldPos.y), Vector2(1, 1), RED);
+
+		EndMode2D();
+	}
+
+}
+
 void main() {
 	int screenWidth = 1920, screenHeight = 1080;
 
@@ -374,6 +511,9 @@ void main() {
 
 	SpriteRenderer sprites;
 	int currentAnimation = 0;
+
+	auto tileRenderer = new TileRenderer();
+
 
 	Sprites.Player.Roll.animationSpeed = 25;
 
@@ -424,6 +564,8 @@ void main() {
 		BeginMode2D(backgroundCam);
 		DrawTexture(tiles, 0, 0, WHITE);
 		EndMode2D();
+
+		tileRenderer.render(camera);
 
 		// draw sprites
 		sprites.render(camera);
