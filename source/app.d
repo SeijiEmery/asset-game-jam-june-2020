@@ -105,13 +105,16 @@ class Sprite {
 				if (loopAnimation) {
 					animationStartTime = GetTime();
 				} else {
+					activeSprite = &activeAnimation.frames[animationCurrentFrame];
 					activeAnimation = null;
 				}
 				if (onSpriteAnimationEnded) {
 					onSpriteAnimationEnded(this);
 				}
 			}
-			activeSprite = &activeAnimation.frames[animationCurrentFrame];
+			if (activeAnimation) {
+				activeSprite = &activeAnimation.frames[animationCurrentFrame];
+			}	
 		}
 		if (activeSprite) {
 			DrawTexture(*activeSprite, cast(int)position.x, cast(int)position.y, WHITE);
@@ -124,7 +127,8 @@ class Sprite {
 struct SpriteRenderer {
 	Sprite[] sprites;
 
-	void render () {
+	void render (ref Camera2D camera) {
+		BeginMode2D(camera);		
 		for (int i = cast(int)sprites.length; i --> 0; ) {
 			if (sprites[i].destroyed) {
 				sprites[i] = sprites[sprites.length - 1];
@@ -133,6 +137,7 @@ struct SpriteRenderer {
 				sprites[i].draw();
 			}
 		}
+		EndMode2D();
 	}
 	Sprite create (Args...)(Args args) {
 		Sprite sprite = new Sprite(args);
@@ -153,6 +158,159 @@ ref Vector2 lerpTo (ref Vector2 a, Vector2 b, double t) {
 	return a = lerp(a, b, t);
 }
 
+double GetStickInput(int gamepad, GamepadAxis axis) {
+	import std.math;
+	double x = GetGamepadAxisMovement(0, axis);
+	double sign = x >= 0 ? +1 : -1;
+	//if (axis == GamepadAxis.GAMEPAD_AXIS_LEFT_Y || axis == GamepadAxis.GAMEPAD_AXIS_RIGHT_Y) {
+	//	sign = -sign;
+	//}
+	x = pow(abs(x), 2.3);
+	return x > 2.5e-2 ? x * sign : 0;
+}
+
+// update camera controls
+void update (ref Camera2D camera, ref Player player, ref bool followPlayer) {
+	double dt = GetFrameTime();
+
+	// camera controls
+	if (IsGamepadAvailable(0)) {
+		auto prevZoom = camera.zoom;
+		camera.zoom += GetFrameTime() * 5.0 * (
+			GetGamepadAxisMovement(0, GamepadAxis.GAMEPAD_AXIS_RIGHT_TRIGGER) -
+			GetGamepadAxisMovement(0, GamepadAxis.GAMEPAD_AXIS_LEFT_TRIGGER)
+		);
+		if (camera.zoom > 10) camera.zoom = 10;
+		if (camera.zoom < 0.5) camera.zoom = 0.5;
+		if (camera.zoom != prevZoom) writefln("set zoom %s", camera.zoom);		
+
+		camera.target.x += dt * 1000 / camera.zoom * GetStickInput(0, GamepadAxis.GAMEPAD_AXIS_RIGHT_X);
+		camera.target.y += dt * 1000 / camera.zoom * GetStickInput(0, GamepadAxis.GAMEPAD_AXIS_RIGHT_Y);
+
+		//writefln("LS.X %s => %s LS.Y %s => %s RS.X %s => %s RS.Y %s => %s",
+		//	GetGamepadAxisMovement(0, GamepadAxis.GAMEPAD_AXIS_LEFT_X),
+		//	GetStickInput(0, GamepadAxis.GAMEPAD_AXIS_LEFT_X),
+		//	GetGamepadAxisMovement(0, GamepadAxis.GAMEPAD_AXIS_LEFT_Y),
+		//	GetStickInput(0, GamepadAxis.GAMEPAD_AXIS_LEFT_Y),
+		//	GetGamepadAxisMovement(0, GamepadAxis.GAMEPAD_AXIS_RIGHT_X),
+		//	GetStickInput(0, GamepadAxis.GAMEPAD_AXIS_RIGHT_X),
+		//	GetGamepadAxisMovement(0, GamepadAxis.GAMEPAD_AXIS_RIGHT_Y),
+		//	GetStickInput(0, GamepadAxis.GAMEPAD_AXIS_RIGHT_Y),
+		//);
+
+		//writefln("LS.X %s LS.Y %s RS.X %s RS.Y %s",
+		//	GetStickInput(0, GamepadAxis.GAMEPAD_AXIS_LEFT_X),
+		//	GetStickInput(0, GamepadAxis.GAMEPAD_AXIS_LEFT_Y),
+		//	GetStickInput(0, GamepadAxis.GAMEPAD_AXIS_RIGHT_X),
+		//	GetStickInput(0, GamepadAxis.GAMEPAD_AXIS_RIGHT_Y),
+		//);
+
+		if (IsGamepadButtonPressed(0, GamepadButton.GAMEPAD_BUTTON_RIGHT_THUMB)) {
+			camera.target = player.sprite.position;
+		}
+		if (IsGamepadButtonPressed(0, GamepadButton.GAMEPAD_BUTTON_LEFT_THUMB)) {
+			followPlayer = !followPlayer;
+		}
+	}
+	//writefln("camera target: %s", camera.target);
+	if (followPlayer) {
+		camera.target.lerpTo(Vector2(
+			player.sprite.position.x,
+			player.sprite.position.y), dt * 4);
+	}
+}
+
+// update player controls
+void update (ref Player player) {
+	import std.math;
+	double moveInput = 0;
+	double dt = GetFrameTime();
+	bool dodgeRollPressed = false;
+	bool jumpPressed = false;
+	bool attackPressed = false;
+
+	if (IsGamepadAvailable(0)) {
+		moveInput += GetStickInput(0, GamepadAxis.GAMEPAD_AXIS_LEFT_X);
+		if (IsGamepadButtonPressed(0, GamepadButton.GAMEPAD_BUTTON_RIGHT_FACE_RIGHT)) {
+			dodgeRollPressed = true;
+		}
+		if (IsGamepadButtonPressed(0, GamepadButton.GAMEPAD_BUTTON_RIGHT_FACE_DOWN)) {
+			jumpPressed = true;
+		}
+		if (IsGamepadButtonPressed(0, GamepadButton.GAMEPAD_BUTTON_RIGHT_FACE_LEFT)) {
+			attackPressed = true;
+		}
+	}
+
+	bool moving = moveInput.abs > 0;
+	
+
+	if (moving) {
+		player.lastMoveDir = moveInput >= 0 ? 1 : -1;
+	}
+
+	if (dodgeRollPressed) {
+		player.inDodgeRollAnim = true;
+		player.sprite.playAnimation(Sprites.Player.Roll);
+		player.dodgeRollDirection = player.lastMoveDir;
+		writefln("starting dodge roll");
+	}
+	if (player.inDodgeRollAnim) {
+		player.sprite.position.x += player.dodgeRollDirection * dt * 300;
+	} else {
+		if (moving != player.wasMoving) {
+			player.wasMoving = moving;
+			if (moving) player.sprite.playAnimation(Sprites.Player.Run, true);
+			else player.sprite.playAnimation(Sprites.Player.Idle, true);
+		}
+		if (moving) {
+			player.sprite.position.x += moveInput * dt * 150;
+		}
+	}
+}
+
+struct Player {
+	Sprite sprite;
+	int nextAnimation = 0;
+	bool wasMoving = false;
+	double lastMoveDir = 1;
+	bool inDodgeRollAnim = false;
+	double dodgeRollDirection = 1;
+
+	this (ref SpriteRenderer renderer) {
+		sprite = renderer.create
+			.fromAsset(Sprites.Player.Idle, false)
+			.setPosition(Vector2(0, 0))
+			.onAnimationEnded(&this.onAnimationEnded);
+	}
+	void onAnimationEnded (Sprite sprite) {
+		if (inDodgeRollAnim) {
+			writefln("ending dodge roll");
+			inDodgeRollAnim = false;
+			sprite.playAnimation(Sprites.Player.Idle, true);
+		}
+			//final switch (animation % 17) {
+			//	case 0: return Sprites.Player.Idle;
+			//	case 1: return Sprites.Player.HitwSword;
+			//	case 2: return Sprites.Player.Attack03;
+			//	case 3: return Sprites.Player.TakeSword;
+			//	case 4: return Sprites.Player.Roll;
+			//	case 5: return Sprites.Player.Hit;
+			//	case 6: return Sprites.Player.Attack02;
+			//	case 7: return Sprites.Player.Death;
+			//	case 8: return Sprites.Player.PutAwaySword;
+			//	case 9: return Sprites.Player.RollSword;
+			//	case 10: return Sprites.Player.RunwSword;
+			//	case 11: return Sprites.Player.StopAttack;
+			//	case 12: return Sprites.Player.Parry;
+			//	case 13: return Sprites.Player.AttackHard;
+			//	case 14: return Sprites.Player.Attack01;
+			//	case 15: return Sprites.Player.Run;
+			//	case 16: return Sprites.Player.ParryWithoutHit;
+			//	case 17: return Sprites.Player.IdlewSword;
+			//}
+	}	
+}
 
 void main() {
 	int screenWidth = 1920, screenHeight = 1080;
@@ -165,128 +323,47 @@ void main() {
 	SpriteRenderer sprites;
 	int currentAnimation = 0;
 
-	ref SpriteAnimation getPlayerAnimation (int animation) {
-		final switch (animation % 17) {
-			case 0: return Sprites.Player.Idle;
-			case 1: return Sprites.Player.HitwSword;
-			case 2: return Sprites.Player.Attack03;
-			case 3: return Sprites.Player.TakeSword;
-			case 4: return Sprites.Player.Roll;
-			case 5: return Sprites.Player.Hit;
-			case 6: return Sprites.Player.Attack02;
-			case 7: return Sprites.Player.Death;
-			case 8: return Sprites.Player.PutAwaySword;
-			case 9: return Sprites.Player.RollSword;
-			case 10: return Sprites.Player.RunwSword;
-			case 11: return Sprites.Player.StopAttack;
-			case 12: return Sprites.Player.Parry;
-			case 13: return Sprites.Player.AttackHard;
-			case 14: return Sprites.Player.Attack01;
-			case 15: return Sprites.Player.Run;
-			case 16: return Sprites.Player.ParryWithoutHit;
-			case 17: return Sprites.Player.IdlewSword;
-		}
-	}
+	Sprites.Player.Roll.animationSpeed = 25;
 
-	auto playerSprite = sprites.create
-		.fromAsset(Sprites.Player.Idle)
-		.setPosition(Vector2(0, 0))
-		.onAnimationEnded(delegate (sprite) { 
-			sprite.playAnimation(getPlayerAnimation(++currentAnimation));
-		});
-
-	auto tree = sprites.create
-		.fromAsset(Sprites.Tree01)
-		.setPosition(Vector2(400, 200));
+	auto player = Player(sprites);
 
 	Camera2D camera;
 	camera.target = Vector2(0, 0);
 	camera.zoom = 4;
 	camera.rotation = 0;
 	camera.offset = Vector2(screenWidth / 2, screenHeight / 2);
-
 	bool followPlayer = false;
 
+	// test
+	auto tree = sprites.create
+		.fromAsset(Sprites.Tree01)
+		.setPosition(Vector2(400, 200));
+
 	while (!WindowShouldClose()) {
+		player.update();
+		camera.update(player, followPlayer);
 
-		double dt = GetFrameTime();
-
-		// camera controls
-		if (IsGamepadAvailable(0)) {
-			auto prevZoom = camera.zoom;
-			camera.zoom += GetFrameTime() * 5.0 * (
-				GetGamepadAxisMovement(0, GamepadAxis.GAMEPAD_AXIS_RIGHT_TRIGGER) -
-				GetGamepadAxisMovement(0, GamepadAxis.GAMEPAD_AXIS_LEFT_TRIGGER)
-			);
-			if (camera.zoom > 10) camera.zoom = 10;
-			if (camera.zoom < 0.5) camera.zoom = 0.5;
-			if (camera.zoom != prevZoom) writefln("set zoom %s", camera.zoom);
-
-
-			double GetStickInput(int gamepad, GamepadAxis axis) {
-				import std.math;
-				double x = GetGamepadAxisMovement(0, axis);
-				double sign = x >= 0 ? +1 : -1;
-				//if (axis == GamepadAxis.GAMEPAD_AXIS_LEFT_Y || axis == GamepadAxis.GAMEPAD_AXIS_RIGHT_Y) {
-				//	sign = -sign;
-				//}
-				x = pow(abs(x), 2.3);
-				return x > 2.5e-2 ? x * sign : 0;
-			}
-
-			camera.target.x += dt * 1000 / camera.zoom * GetStickInput(0, GamepadAxis.GAMEPAD_AXIS_RIGHT_X);
-			camera.target.y += dt * 1000 / camera.zoom * GetStickInput(0, GamepadAxis.GAMEPAD_AXIS_RIGHT_Y);
-
-			//writefln("LS.X %s => %s LS.Y %s => %s RS.X %s => %s RS.Y %s => %s",
-			//	GetGamepadAxisMovement(0, GamepadAxis.GAMEPAD_AXIS_LEFT_X),
-			//	GetStickInput(0, GamepadAxis.GAMEPAD_AXIS_LEFT_X),
-			//	GetGamepadAxisMovement(0, GamepadAxis.GAMEPAD_AXIS_LEFT_Y),
-			//	GetStickInput(0, GamepadAxis.GAMEPAD_AXIS_LEFT_Y),
-			//	GetGamepadAxisMovement(0, GamepadAxis.GAMEPAD_AXIS_RIGHT_X),
-			//	GetStickInput(0, GamepadAxis.GAMEPAD_AXIS_RIGHT_X),
-			//	GetGamepadAxisMovement(0, GamepadAxis.GAMEPAD_AXIS_RIGHT_Y),
-			//	GetStickInput(0, GamepadAxis.GAMEPAD_AXIS_RIGHT_Y),
-			//);
-
-			//writefln("LS.X %s LS.Y %s RS.X %s RS.Y %s",
-			//	GetStickInput(0, GamepadAxis.GAMEPAD_AXIS_LEFT_X),
-			//	GetStickInput(0, GamepadAxis.GAMEPAD_AXIS_LEFT_Y),
-			//	GetStickInput(0, GamepadAxis.GAMEPAD_AXIS_RIGHT_X),
-			//	GetStickInput(0, GamepadAxis.GAMEPAD_AXIS_RIGHT_Y),
-			//);
-
-			if (IsGamepadButtonPressed(0, GamepadButton.GAMEPAD_BUTTON_RIGHT_THUMB)) {
-				camera.target = playerSprite.position;
-			}
-			if (IsGamepadButtonPressed(0, GamepadButton.GAMEPAD_BUTTON_LEFT_THUMB)) {
-				followPlayer = !followPlayer;
-			}
-		}
-		//writefln("camera target: %s", camera.target);
-		if (followPlayer) {
-			camera.target.lerpTo(Vector2(
-				playerSprite.position.x,
-				playerSprite.position.y), dt * 4);
-		}
-		
-		BeginDrawing();
-		
-		ClearBackground(RAYWHITE);
-		DrawText("Hello, World!", 400, 300, 28, BLACK);
-		
-		BeginMode2D(camera);
-		sprites.render();
-		EndMode2D();
-		EndDrawing();
-		if (!IsGamepadAvailable(0)) {
-			writefln("no gamepad present!!");
-		}
-
+		// sprite destruction test
 		if (IsGamepadAvailable(0) && IsGamepadButtonPressed(0, GamepadButton.GAMEPAD_BUTTON_RIGHT_FACE_UP)) {
 			tree.destroy();
 		}
+		if (!IsGamepadAvailable(0)) {
+			writefln("no gamepad present!!");
+		}
+		
+		BeginDrawing();
+		ClearBackground(RAYWHITE);
+		
+		// draw non-scaled user interface elements
+		DrawText("Hello, World!", 400, 300, 28, BLACK);
+		
+		// draw background...?
 
 
+		// draw sprites
+		sprites.render(camera);
+
+		EndDrawing();
 	}
 	CloseWindow();
 }
