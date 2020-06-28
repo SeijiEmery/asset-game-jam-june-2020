@@ -4,24 +4,32 @@
 	],
 	"copyright": "Copyright © 2020, Seiji Emery",
 	"dependencies": {
-		"bindbc-loader": "~>0.2.1",
 		"bindbc-glfw": "~>0.9.0",
+		"bindbc-loader": "~>0.2.1",
 		"bindbc-nuklear": "~>0.4.3",
+		"derelict-imgui": "~>0.10.0",
+		"dimgui": "~>1.0.3",
+		"draygui": "~>0.1.0",
 		"raylib-d": "~>3.0.2"
 	},
+	"description": "small 8 bit game from scratch for a game jam from an 8 bit asset pack",
 	"libs": [
-		"raylib", "nuklear"
+		"raylib",
+		"nuklear"
 	],
+	"license": "proprietary",
+	"name": "agj2020",
 	"subPackages": [
 		{
-			"name": "mapgen",
-			"targetType": "executable",
+			"importPaths": [
+				"source"
+			],
 			"mainSourceFile": "source/mapgen.d",
-			"sourcePaths": ["source"],
-			"importPaths": ["source"],
+			"name": "mapgen",
+			"sourcePaths": [
+				"source"
+			],
+			"targetType": "executable"
 		}
-	],
-	"description": "small 8 bit game from scratch for a game jam from an 8 bit asset pack",
-	"license": "proprietary",
-	"name": "agj2020"
+	]
 }

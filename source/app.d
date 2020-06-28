@@ -9,40 +9,6 @@ import std.stdio;
 import std.functional: toDelegate;
 import std.string: toStringz;
 
-//extern(C) void* nkAlloc (nk_handle handle, void* ptr, size_t size) nothrow @nogc {
-//	return ptr ? malloc(size) : realloc(ptr, size);
-//}
-//extern(C) void nkFree (nk_handle, void* ptr) nothrow @nogc {
-//	free(ptr);
-//}
-
-//struct NkInit {
-//	nk_context context;
-//	nk_allocator allocator;
-//	nk_font_atlas atlas;
-//	void[] memory;
-//	this(this) {
-//		version(BindNuklear_Static){}
-//		else {
-//			NuklearSupport support = loadNuklear();
-//			enforce(support == NuklearSupport.Nuklear4,
-//				format("expected %s, got %s",
-//					NuklearSupport.Nuklear4,
-//					support));
-//		}
-//		allocator.alloc = &nkAlloc;
-//		allocator.free = &nkFree;
-//		nk_font_atlas_init_default(&atlas);		
-//		nk_font_atlas_begin(&atlas);
-//		nk_font_atlas_add_from_file(&atlas, "assets/fonts/Calibri.ttf", 13, 0);
-//		const void* img = nk_font_atlas_bake(&atlas, &img_width, &img_height, NK_FONT_ATLAS_RGBA32);
-//		nk_font_atlas_end(&atlas);	
-//		nk_init(&context, &allocator, atlas);
-//	}
-//	~this() {
-
-//	}
-//}
 
 class Sprite {
 	private Texture* 		 activeSprite = null;
@@ -195,20 +161,25 @@ double GetStickInput(int gamepad, GamepadAxis axis) {
 	return x > 2.5e-2 ? x * sign : 0;
 }
 
+struct CameraControllerState {
+	bool followPlayer;
+	bool isDraggingCamera;
+	Vector2 dragStartPos;
+}
+
+
+
 // update camera controls
-void update (ref Camera2D camera, ref Player player, ref bool followPlayer) {
+void update (ref Camera2D camera, ref Player player, ref CameraControllerState state) {
 	double dt = GetFrameTime();
 
 	// camera controls
+	auto prevZoom = camera.zoom;
 	if (IsGamepadAvailable(0)) {
-		auto prevZoom = camera.zoom;
 		camera.zoom += GetFrameTime() * 5.0 * (
 			GetGamepadAxisMovement(0, GamepadAxis.GAMEPAD_AXIS_RIGHT_TRIGGER) -
 			GetGamepadAxisMovement(0, GamepadAxis.GAMEPAD_AXIS_LEFT_TRIGGER)
 		);
-		if (camera.zoom > 10) camera.zoom = 10;
-		if (camera.zoom < 0.5) camera.zoom = 0.5;
-		if (camera.zoom != prevZoom) writefln("set zoom %s", camera.zoom);		
 
 		camera.target.x += dt * 1000 / camera.zoom * GetStickInput(0, GamepadAxis.GAMEPAD_AXIS_RIGHT_X);
 		camera.target.y += dt * 1000 / camera.zoom * GetStickInput(0, GamepadAxis.GAMEPAD_AXIS_RIGHT_Y);
@@ -235,11 +206,37 @@ void update (ref Camera2D camera, ref Player player, ref bool followPlayer) {
 			camera.target = player.sprite.position;
 		}
 		if (IsGamepadButtonPressed(0, GamepadButton.GAMEPAD_BUTTON_LEFT_THUMB)) {
-			followPlayer = !followPlayer;
+			state.followPlayer = !state.followPlayer;
 		}
 	}
+
+	camera.zoom += GetFrameTime() * GetMouseWheelMove() * 3;
+
+	if (camera.zoom > 10) camera.zoom = 10;
+	if (camera.zoom < 0.5) camera.zoom = 0.5;
+	if (camera.zoom != prevZoom) writefln("set zoom %s", camera.zoom);		
+
+
+	if (MouseUI.beginDrag(
+		MouseButton.MOUSE_MIDDLE_BUTTON, 
+		delegate () {
+			writefln("drag movement: %s %s", GetMouseX() - state.dragStartPos.x, GetMouseY() - state.dragStartPos.y);
+			camera.target.x += (state.dragStartPos.x - GetMouseX()) / camera.zoom;
+			camera.target.y += (state.dragStartPos.y - GetMouseY()) / camera.zoom;
+			state.dragStartPos = Vector2(GetMouseX(), GetMouseY());
+		},
+		delegate () {
+			writefln("stop drag");
+			state.isDraggingCamera = false;
+		}
+	)) {
+		writefln("start drag");
+		state.isDraggingCamera = true;
+		state.dragStartPos = Vector2(GetMouseX(), GetMouseY());
+	}
+
 	//writefln("camera target: %s", camera.target);
-	if (followPlayer) {
+	if (state.followPlayer) {
 		camera.target.lerpTo(Vector2(
 			-player.sprite.position.x,
 			-player.sprite.position.y), dt * 4);
@@ -549,13 +546,57 @@ class TileRenderer {
 
 }
 
+struct MouseUI {
+	private static bool 		   handled = false;
+	private static bool 		   dragActive = false;
+	private static MouseButton 	   activeDragButton;
+	private static void delegate() onDragUpdate;
+	private static void delegate() onDragEnd;
+
+	public static void beginFrame() {
+		handled = false;
+		if (dragActive && IsMouseButtonUp(activeDragButton)) {
+			if (onDragEnd) onDragEnd();
+			dragActive = false;
+		} else if (dragActive) {
+			if (onDragUpdate) onDragUpdate();
+			handled = true;
+		}
+	}
+	public static bool pressed (MouseButton button) {
+		if (handled) return false;
+		if (IsMouseButtonPressed(button)) {
+			handled = true;
+			return true;
+		}
+		return false;
+	}
+	public static bool pressedOver (MouseButton button, Rectangle screenRect) {
+		return CheckCollisionPointRec(Vector2(GetMouseX(), GetMouseY()), screenRect) && pressed(button);
+	}
+	public static bool beginDrag (MouseButton button, void delegate() onUpdate, void delegate() onEnd) {
+		if (handled) return false;
+		if (IsMouseButtonDown(button)) {
+			handled = dragActive = true;
+			activeDragButton = button;
+			onDragUpdate = onUpdate;
+			onDragEnd = onEnd;
+			return true;
+		}
+		return false;
+	}
+	public static bool beginDragOver (MouseButton button, Rectangle screenRect, void delegate() onUpdate, void delegate() onEnd) {
+		return CheckCollisionPointRec(Vector2(GetMouseX(), GetMouseY()), screenRect) && beginDrag(button, onUpdate, onEnd);
+	}
+}
+
 void main() {
 	int screenWidth = 1920, screenHeight = 1080;
-
 	InitWindow(screenWidth, screenHeight, "asset game jam");
 	SetTargetFPS(60);
 
 	Sprites.load(); // preload all sprites
+ 
 
 	SpriteRenderer sprites;
 	int currentAnimation = 0;
@@ -572,7 +613,7 @@ void main() {
 	camera.zoom = 4;
 	camera.rotation = 0;
 	camera.offset = Vector2(screenWidth / 2, screenHeight / 2);
-	bool followPlayer = false;
+	CameraControllerState cameraControlState;
 
 	Texture2D tiles = LoadTexture("assets/tiles/cavesofgallet.png");
 	//Texture2D tiles = LoadTexture("assets/tiles/tiles.png");
@@ -583,8 +624,10 @@ void main() {
 		.setPosition(Vector2(400, 200));
 
 	while (!WindowShouldClose()) {
+		MouseUI.beginFrame();
+
 		player.update();
-		camera.update(player, followPlayer);
+		camera.update(player, cameraControlState);
 
 		// sprite destruction test
 		if (IsGamepadAvailable(0) && IsGamepadButtonPressed(0, GamepadButton.GAMEPAD_BUTTON_RIGHT_FACE_UP)) {
