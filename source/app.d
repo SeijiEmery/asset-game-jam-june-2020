@@ -220,17 +220,17 @@ void update (ref Camera2D camera, ref Player player, ref CameraControllerState s
 	if (MouseUI.beginDrag(
 		MouseButton.MOUSE_MIDDLE_BUTTON, 
 		delegate () {
-			writefln("drag movement: %s %s", GetMouseX() - state.dragStartPos.x, GetMouseY() - state.dragStartPos.y);
+			//writefln("drag movement: %s %s", GetMouseX() - state.dragStartPos.x, GetMouseY() - state.dragStartPos.y);
 			camera.target.x += (state.dragStartPos.x - GetMouseX()) / camera.zoom;
 			camera.target.y += (state.dragStartPos.y - GetMouseY()) / camera.zoom;
 			state.dragStartPos = Vector2(GetMouseX(), GetMouseY());
 		},
 		delegate () {
-			writefln("stop drag");
+			//writefln("stop drag");
 			state.isDraggingCamera = false;
 		}
 	)) {
-		writefln("start drag");
+		//writefln("start drag");
 		state.isDraggingCamera = true;
 		state.dragStartPos = Vector2(GetMouseX(), GetMouseY());
 	}
@@ -454,7 +454,8 @@ Vector2 tileToScreenCoords (TileIndex index, ref const(Camera2D) camera) {
 	return GetWorldToScreen2D(tileToWorldCoords(index), camera);
 }
 TileIndex worldToTileCoords (Vector2 worldPos) {
-	return TileIndex(cast(int)(worldPos.x / 8), cast(int)(worldPos.y / 8));
+	auto index = TileIndex(cast(int)(worldPos.x / 8), cast(int)(worldPos.y / 8));
+	return index;
 }
 TileIndex screenToTileCoords (Vector2 screenPos, ref const(Camera2D) camera) {
 	return worldToTileCoords(GetScreenToWorld2D(screenPos, camera));
@@ -664,6 +665,65 @@ struct GUIPanel {
 				return false;
 		}
 	}
+	public bool verticalSelectionToggle(T)(ref T value, Color textColor = WHITE, Color backgroundColor = BLACK) {
+		import std.traits;
+		import std.conv: to;
+		bool changed = false;
+		bool first = true;
+		foreach (val; [EnumMembers!T]) {
+			if (button(val.to!string, textColor, backgroundColor)) {
+				value = val;
+				changed = true;
+				lighten(elements[$-1].backgroundColor, 20);
+			} else if (val == value) {
+				lighten(elements[$-1].backgroundColor, 30);
+			}
+			if (first) { 
+				first = false;
+			} else {
+				elements[$-1].rect.y -= 5;
+				//layout.height -= 5;
+				layout.y -= 5;
+			}
+		}
+		return changed;
+	}
+	public bool horizontalSelectionToggle(T)(ref T value, Color textColor = WHITE, Color backgroundColor = BLACK) {
+		import std.traits;
+		import std.conv: to;
+		bool changed = false;
+		bool first = true;
+
+		Rectangle rect = layout;
+		rect.height = 25;
+		layout.y += 32;
+		layout.height += 28;
+
+		foreach (val; [EnumMembers!T]) {
+			string name = val.to!string;
+			if (first) { first = false; }
+			else { rect.x += rect.width + 2; }
+			rect.width = MeasureText(name.toStringz, 16) + 18;
+			Color color = backgroundColor;
+
+			switch (MouseUI.pressedOver(MouseButton.MOUSE_LEFT_BUTTON, rect)) {
+				case MouseUI.Result.Pressed:
+					lighten(color, 10);
+					value = val;
+					changed = true;
+					break;
+				case MouseUI.Result.Mouseover:
+					lighten(color, 30);
+					break;
+				default:
+			}
+			if (value == val) {
+				lighten(color, 50);
+			}
+			elements ~= GUIRect(name, rect, textColor, color);
+		}
+		return changed;
+	}
 	public void draw() {
 		Color tempColor = color;
 		if (hasMouseover) lighten(tempColor, 30);
@@ -719,6 +779,9 @@ void main() {
 	panelTest.position = Vector2(0, 0);
 	panelTest.width = 200;
 
+	enum Test { Foo, Bar, Baz };
+	Test testEnumValue;
+
 	// test
 	auto tree = sprites.create
 		.fromAsset(Sprites.Tree01)
@@ -736,6 +799,7 @@ void main() {
 		if (panelTest.button("click me!")) {
 
 		}
+		if (panelTest.horizontalSelectionToggle(testEnumValue)) {}
 		panelTest.endUI();
 
 		player.update();
