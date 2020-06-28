@@ -52,6 +52,8 @@ class Sprite {
 	public Vector2 		 	 position = Vector2(0, 0);
 	private bool  		     loopAnimation = false;
 	private bool 		     destroyed = false;
+	private bool 		     flipX = false;
+	private Vector2 	     centerOffset = Vector2(0, 0);
 	private void delegate(Sprite) onSpriteAnimationEnded;
 
 	public @property bool 	 playing () { return activeAnimation != null; }
@@ -75,6 +77,7 @@ class Sprite {
 		if (!spriteAsset.loaded) spriteAsset.load();
 		activeSprite = &spriteAsset.sprite;
 		activeAnimation = null;
+		flipX = false;
 		return this;
 	}
 	Sprite playAnimation(ref SpriteAnimation animation, bool loopAnimation = false) {
@@ -83,7 +86,12 @@ class Sprite {
 		activeSprite = &animation.frames[0];
 		activeAnimation = &animation;
 		animationCurrentFrame = 0;
+		flipX = false;
 		this.loopAnimation = loopAnimation;
+		return this;
+	}
+	Sprite setCenterOffset(Vector2 offset) {
+		centerOffset = offset;
 		return this;
 	}
 	Sprite onAnimationEnded(void function(Sprite) onSpriteAnimationEnded) {
@@ -91,6 +99,10 @@ class Sprite {
 	}
 	Sprite onAnimationEnded (void delegate(Sprite) onSpriteAnimationEnded) {
 		this.onSpriteAnimationEnded = onSpriteAnimationEnded;
+		return this;
+	}
+	Sprite setXFlipped (bool flipped) {
+		flipX = !flipped;
 		return this;
 	}
 	void draw() {
@@ -117,7 +129,20 @@ class Sprite {
 			}	
 		}
 		if (activeSprite) {
-			DrawTexture(*activeSprite, cast(int)position.x, cast(int)position.y, WHITE);
+			auto w = activeSprite.width, h = activeSprite.height;
+			auto srcRect = Rectangle(0, 0, w, h);
+			auto dstRect = srcRect;
+			
+			Vector2 pos = position;
+			if (flipX) {
+				srcRect.w = -w;
+				dstRect.x = -dstRect.x;
+				pos.x += centerOffset.x;
+			} else {
+				pos.x -= centerOffset.x;
+			}
+			DrawTexturePro(*activeSprite, srcRect, dstRect, pos, 0, WHITE);
+			DrawRectangleLines(-cast(int)position.x, -cast(int)position.y, cast(int)w, cast(int)h, WHITE);
 		}
 	}
 	void destroy () { destroyed = true; writefln("destroying sprite!!"); }
@@ -230,7 +255,7 @@ void update (ref Player player) {
 	bool attackPressed = false;
 
 	if (IsGamepadAvailable(0)) {
-		moveInput += GetStickInput(0, GamepadAxis.GAMEPAD_AXIS_LEFT_X);
+		moveInput -= GetStickInput(0, GamepadAxis.GAMEPAD_AXIS_LEFT_X);
 		if (IsGamepadButtonPressed(0, GamepadButton.GAMEPAD_BUTTON_RIGHT_FACE_RIGHT)) {
 			dodgeRollPressed = true;
 		}
@@ -244,29 +269,46 @@ void update (ref Player player) {
 
 	bool moving = moveInput.abs > 0;
 	
-
-	if (moving) {
+	if (moving && !player.inAttackAnim) {
 		player.lastMoveDir = moveInput >= 0 ? 1 : -1;
 	}
 
-	if (dodgeRollPressed) {
+	if (dodgeRollPressed && !player.inAttackAnim) {
 		player.inDodgeRollAnim = true;
 		player.sprite.playAnimation(Sprites.Player.Roll);
 		player.dodgeRollDirection = player.lastMoveDir;
+		player.sprite.setXFlipped(player.dodgeRollDirection < 0);
 		writefln("starting dodge roll");
 	}
+
+	if (attackPressed && !player.inDodgeRollAnim && !player.inAttackAnim) {
+		player.inAttackAnim = true;
+		import std.random;
+		final switch (std.random.dice(20, 30, 30, 20)) {
+			case 0: player.sprite.playAnimation(Sprites.Player.Attack01); break;
+			case 1: player.sprite.playAnimation(Sprites.Player.Attack02); break;
+			case 2: player.sprite.playAnimation(Sprites.Player.Attack03); break;
+			case 3: player.sprite.playAnimation(Sprites.Player.AttackHard); break;
+		}
+	}
+
 	if (player.inDodgeRollAnim) {
 		player.sprite.position.x += player.dodgeRollDirection * dt * 300;
 	} else {
 		if (moving != player.wasMoving) {
 			player.wasMoving = moving;
-			if (moving) player.sprite.playAnimation(Sprites.Player.Run, true);
-			else player.sprite.playAnimation(Sprites.Player.Idle, true);
+
+			if (!player.inAttackAnim) {
+				if (moving) player.sprite.playAnimation(Sprites.Player.Run, true);
+				else player.sprite.playAnimation(Sprites.Player.Idle, true);
+			}
 		}
+		player.sprite.setXFlipped(player.lastMoveDir < 0);
 		if (moving) {
 			player.sprite.position.x += moveInput * dt * 150;
 		}
 	}
+	player.sprite.setCenterOffset(Vector2(5, 0));
 }
 
 struct Player {
@@ -275,18 +317,27 @@ struct Player {
 	bool wasMoving = false;
 	double lastMoveDir = 1;
 	bool inDodgeRollAnim = false;
+	bool inAttackAnim = false;
 	double dodgeRollDirection = 1;
 
 	this (ref SpriteRenderer renderer) {
 		sprite = renderer.create
 			.fromAsset(Sprites.Player.Idle, false)
 			.setPosition(Vector2(0, 0))
-			.onAnimationEnded(&this.onAnimationEnded);
+			.onAnimationEnded(&this.onAnimationEnded)
+			.setCenterOffset(Vector2(10, 0))
+		;
 	}
 	void onAnimationEnded (Sprite sprite) {
 		if (inDodgeRollAnim) {
 			writefln("ending dodge roll");
 			inDodgeRollAnim = false;
+		}
+		if (inAttackAnim) {
+			inAttackAnim = false;
+			sprite.playAnimation(Sprites.Player.StopAttack, false);
+		}
+		if (!sprite.playing) {
 			sprite.playAnimation(Sprites.Player.Idle, true);
 		}
 			//final switch (animation % 17) {
@@ -352,7 +403,8 @@ void main() {
 		}
 		
 		BeginDrawing();
-		ClearBackground(RAYWHITE);
+		ClearBackground(BLACK);
+		//ClearBackground(RAYWHITE);
 		
 		// draw non-scaled user interface elements
 		DrawText("Hello, World!", 400, 300, 28, BLACK);
