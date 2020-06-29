@@ -15,51 +15,23 @@ import agj.editors.tile_layers;
 enum LayerType {
 	None 					= 0x0,
 	Air 					= 0x10,
-	WallDeco 				= 0x12,
-	WallVegeation 			= 0x13,
+	WallTiles 				= 0x12,
+	Vegetation 				= 0x13,
 	Torch 					= 0x14,
 	Ladder 					= 0x15,
 	Platform 				= 0x16,
-	Support  	    		= 0x17,
-
-	InteriorFluidBody 			= 0x50,
-	InteriorFluidCascaseSmall 	= 0x51,
-	InteriorFluidCascaseLarge 	= 0x52,
 
 	Ground 					= 0x20,
 
 	Fluid 					= 0x40,
-	Water 					= 0x44,
-	Lava 					= 0x48,
 
-	WaterBody 				= 0x54,
-	WaterCascadeSmall 		= 0x55,
-	WaterCascadeLarge 		= 0x56,
+	Water 			   		= 0x54,
+	Waterfall 				= 0x55,
+	Waterspout				= 0x56,
 
-	LavaBody		 		= 0x58,
-	LavaCascadeSmall 		= 0x59,
-	LavaCascadeLarge 		= 0x5A,
+	Lava	 		 		= 0x58,
+	LavaFall 				= 0x59,
 }
-Color toColor (LayerType layer) {
-	switch (layer) {
-		case LayerType.None: return Color(0,0,0,0); 
-        case LayerType.Air:  return GRAY; 
-        case LayerType.Ground: return BROWN; 
-        case LayerType.WaterBody: return DARKBLUE; 
-        case LayerType.WaterCascadeSmall: return BLUE; 
-        case LayerType.WaterCascadeLarge: return SKYBLUE; 
-        case LayerType.LavaBody:  			return RED; 
-        case LayerType.LavaCascadeSmall:  	return MAROON; 
-        case LayerType.LavaCascadeLarge:  	return ORANGE; 
-        case LayerType.Ladder: 				return LIME; 
-        case LayerType.Platform: 			return GREEN; 
-        case LayerType.Support: 			return DARKGREEN; 
-		default: return PINK;
-
-	}
-}
-
-
 enum TileType {
 	None 					= 0x0,
 	Air 					= 0x1,
@@ -80,10 +52,6 @@ enum TileType {
 	WallGroundSingleVerticalTop = 0x17,
 	WallGroundSingleVerticalBtm = 0x18,
 
-	WallOutsideSideAdj 		= 0x37,
-	WallOutsideTopAdj 		= 0x38,
-	WallOutsideBtmAdj 		= 0x39,
-
 	LadderTop 				= 0x20,
 	Ladder 					= 0x21,
 
@@ -96,19 +64,33 @@ enum TileType {
 	PlatformPillar 				= 0x27,
 	PlatformWithSupportPillar 	= 0x29,
 
-	CascadeOrigin 			= 0x31,
-	CascadeSmall 			= 0x32,
-	CascadeLarge 			= 0x33,
+	Water,
+	WaterTop,
+	WaterBtm,
+	WaterBtmImpact,
+	WaterBtmImpactL,
+	WaterBtmImpactR,
+	WaterSideL,
+	WaterSideR,
 
-	CascadeImpactTop 		= 0x34,
-	CascadeImpactTopCornerL = 0x35,
-	CascadeImpactTopCornerR = 0x05,
-	CascadeImpactBtm		= 0x06,
-	CascadeImpactBtmCorner 	= 0x07,
-	CascadeImpactSmall      = 0x08,
+	WaterFall,
+	WaterFallImpact,
+	WaterFallImpactL,
+	WaterFallImpactR,
 
-	FlipX 					= 0x100,
-	VegetationFlag 			= 0x80,
+	WaterSpout,
+	WaterSpoutImpact,
+	WaterSource,
+
+	Lava,
+	LavaTop,
+	LavaBtm,
+	LavaSideL,
+	LavaSideR,
+
+	LavaFall,
+	LavaFallImpact,
+	LavaSource,
 }
 enum BiomeType {
 	Any 					= 0x1F,
@@ -148,14 +130,6 @@ TileType generateTilesFirstPass (
 	if (center.isGround) {		
 		auto lg = left.isGround, rg = right.isGround;
 		if (!top.isGround) {
-			//if (top.isFluid) {
-			//	if (left.isFluid == right.isFluid) {
-			//	} else if (!left.isFluid) {
-
-			//	} else if (!right.isFluid) {
-
-			//	}
-			//} else 
 			if (lg == rg) {
 				return TileType.WallGroundTop;
 			} else if (!lg) {
@@ -179,22 +153,44 @@ TileType generateTilesFirstPass (
 		}
 	} 
 	else if (center.isFluid) {
-		outputBiome.get(x, y) = (center & LayerType.Lava) ? BiomeType.Lava : BiomeType.Water;
 		switch (center) {
-			case LayerType.WaterCascadeSmall: case LayerType.LavaCascadeSmall:
-				if (btm.isFluid && (btm != LayerType.WaterCascadeSmall && btm != LayerType.LavaCascadeSmall)) {
-					return TileType.CascadeImpactSmall;
-				} else if (top == LayerType.WaterCascadeSmall || top == LayerType.LavaCascadeSmall) {
-					return TileType.CascadeSmall;
-				} else {
-					return TileType.CascadeOrigin;
-				}
-			case LayerType.LavaCascadeLarge: case LayerType.WaterCascadeLarge:
-				return TileType.CascadeLarge;
+			case LayerType.Water:
+				if (btm != LayerType.Water) return TileType.WaterBtm;
+				if (top == LayerType.Water) return TileType.Water;
+				if (top == LayerType.Waterfall) return TileType.WaterBtmImpact;
+				if (layer.get(x-1,y-1) == LayerType.Waterfall) return TileType.WaterBtmImpactL;
+				if (layer.get(x+1,y-1) == LayerType.Waterfall) return TileType.WaterBtmImpactR;
+				return TileType.WaterTop;
+
+			case LayerType.Lava:
+				if (btm != LayerType.Lava) return TileType.LavaBtm;
+				if (top == LayerType.Lava) return TileType.Lava;
+				return TileType.LavaTop;
+
+			case LayerType.Waterfall:
+				if (btm != LayerType.Waterfall) return TileType.WaterFallImpact;
+				return TileType.WaterFall;
+
+			case LayerType.Waterspout:
+				if (btm != LayerType.Waterspout) return TileType.WaterSpoutImpact;
+				if (top != LayerType.Waterspout) return TileType.WaterSource;
+				return TileType.WaterSpout;
+
+
+			//case LayerType.LavaCascadeSmall:
+			//	if (btm.isFluid && (btm != LayerType.WaterCascadeSmall && btm != LayerType.LavaCascadeSmall)) {
+			//		return TileType.CascadeImpactSmall;
+			//	} else if (top == LayerType.WaterCascadeSmall || top == LayerType.LavaCascadeSmall) {
+			//		return TileType.CascadeSmall;
+			//	} else {
+			//		return TileType.CascadeOrigin;
+			//	}
+			//case LayerType.LavaCascadeLarge: case LayerType.WaterCascadeLarge:
+			//	return TileType.CascadeLarge;
 			default:
-				if (!btm.isFluid) return TileType.WallGroundBtm;
-				if (!top.isFluid) return TileType.WallGroundTop;
-				return TileType.WallGroundInterior;
+				//if (!btm.isFluid) return TileType.WallGroundBtm;
+				//if (!top.isFluid) return TileType.WallGroundTop;
+				//return TileType.WallGroundInterior;
 		}
 	}
 	else {
@@ -227,8 +223,6 @@ TileType generateTilesFirstPass (
 				return left.isGround ? TileType.PlatformEdgeL 
 					: right.isGround ? TileType.PlatformEdgeR
 					: TileType.Platform;
-			case LayerType.Support: 
-				return TileType.PlatformPillar;
 
 			default: return TileType.Air;
 		}		
@@ -256,18 +250,46 @@ uint renderTile (
 		case TileType.PlatformEdgeR: 	 			return 0x10;
 		case TileType.PlatformPillar: 	 			return 31;
 		case TileType.PlatformWithSupportPillar: 	return 23;
-		case TileType.CascadeOrigin: 				
-			return biome == BiomeType.Lava ? 73 : 69;
-		case TileType.CascadeSmall:
-			return biome == BiomeType.Lava ? 77 : 75;
-		case TileType.CascadeImpactSmall:
-			return biome == BiomeType.Lava ? 85 : 84;
-		case TileType.CascadeLarge:
-			return biome == BiomeType.Lava ? 77 : 74;
-		case TileType.CascadeImpactTop:
-			return biome == BiomeType.Lava ? 85 : 82;
-		case TileType.CascadeImpactTopCornerL: return 81;
-		case TileType.CascadeImpactTopCornerR: return 83;
+		//case TileType.CascadeOrigin: 				
+		//	return biome == BiomeType.Lava ? 73 : 69;
+		//case TileType.CascadeSmall:
+		//	return biome == BiomeType.Lava ? 77 : 75;
+		//case TileType.CascadeImpactSmall:
+		//	return biome == BiomeType.Lava ? 85 : 84;
+		//case TileType.CascadeLarge:
+		//	return biome == BiomeType.Lava ? 77 : 74;
+		//case TileType.CascadeImpactTop:
+		//	return biome == BiomeType.Lava ? 85 : 82;
+		//case TileType.CascadeImpactTopCornerL: return 81;
+		//case TileType.CascadeImpactTopCornerR: return 83;
+
+		case TileType.Water: 	return 0x5B;
+		case TileType.WaterTop: return 0x54;
+		case TileType.WaterBtm: return 0x59;
+		case TileType.WaterBtmImpact:  return 0x52;
+		case TileType.WaterBtmImpactL: return 0x51;
+		case TileType.WaterBtmImpactR: return 0x53;
+		case TileType.WaterSideL: return 0x15C;
+		case TileType.WaterSideR: return 0x5C;
+ 
+		case TileType.WaterFall: return uniform01() < 0.3 ? 0x42 : 0x5B;
+		case TileType.WaterFallImpact:  return 0x4A;
+		case TileType.WaterFallImpactL: return 0x49;
+		case TileType.WaterFallImpactR: return 0x4B;
+ 
+		case TileType.WaterSpout: return 0x43;
+		case TileType.WaterSpoutImpact: return 0x4C;
+		case TileType.WaterSource: return 0x41;
+ 
+		case TileType.Lava: return 1;
+		case TileType.LavaTop: return 1;
+		case TileType.LavaBtm: return 1;
+		case TileType.LavaSideL: return 1;
+		case TileType.LavaSideR: return 1;
+ 
+		case TileType.LavaFall: return 1;
+		case TileType.LavaFallImpact: return 1;
+		case TileType.LavaSource: return 1;
 
 		default:
 			switch (biome) {
@@ -439,7 +461,7 @@ class RenderedTileMap {
 	}
 	void drawCascade(int x, int y, LayerType value, FillMode drawMode, ref LayerType[] prevValues) {
 		int end = y + 1;
-		while (editableLayers.get(x, end) && !editableLayers.get(x, end).isGround) {
+		while (editableLayers.get(x, end) && !editableLayers.get(x, end).isGround && !editableLayers.get(x, end).isFluid) {
 			++end;
 		}
 		writefln("drawing cascade at %s %s -> cascaded to %s (length %s)", x, y, end, end - y);
@@ -529,15 +551,13 @@ void erase(TileMap!LayerType tilemap, int i, int j) {
 }
 bool drawWithCascade (LayerType layerType) {
 	switch (layerType) {
-		case LayerType.WaterCascadeSmall:
-		case LayerType.LavaCascadeSmall:
-		case LayerType.WaterCascadeLarge:
-		case LayerType.LavaCascadeLarge:
+		case LayerType.Waterfall:
+		case LayerType.LavaFall:
+		case LayerType.Waterspout:
 		case LayerType.Ladder: return true;
 		default: return false;
 	}
 }
-
 
 class TileMapEditor {
 	public RenderedTileMap tilemap = new RenderedTileMap();
@@ -662,30 +682,25 @@ class TileMapEditor {
         editorPanel.endUI();
 
         // tile editor hotkeys
-        if (IsKeyPressed(KeyboardKey.KEY_R)) { drawMode = DrawMode.Rect; }
-        if (IsKeyPressed(KeyboardKey.KEY_E)) { drawMode = DrawMode.Point; }
+        if (IsKeyPressed(KeyboardKey.KEY_R)) { drawMode = drawMode == DrawMode.Point ? DrawMode.Rect : DrawMode.Point; }
         if (IsKeyPressed(KeyboardKey.KEY_F)) { fillMode = fillMode == FillMode.Default ? FillMode.FillEmpty : FillMode.Default; }
-        if (IsKeyPressed(KeyboardKey.KEY_D)) { activeLayer = LayerType.Ground; }
+        if (IsKeyPressed(KeyboardKey.KEY_G)) { activeLayer = LayerType.Ground; }
         if (IsKeyPressed(KeyboardKey.KEY_A)) { activeLayer = LayerType.Air; }
         if (IsKeyPressed(KeyboardKey.KEY_W)) {
             switch (activeLayer) {
-                case LayerType.WaterBody: activeLayer = LayerType.WaterCascadeSmall; break;
-                case LayerType.WaterCascadeSmall: activeLayer = LayerType.WaterCascadeLarge; break;
-                default: activeLayer = LayerType.WaterBody;
+                case LayerType.Water: activeLayer = LayerType.Waterfall; break;
+                case LayerType.Waterfall: activeLayer = LayerType.Waterspout; break;
+                default: activeLayer = LayerType.Water;
             }
         }
         if (IsKeyPressed(KeyboardKey.KEY_L)) {
             switch (activeLayer) {
-                case LayerType.LavaBody: activeLayer = LayerType.LavaCascadeSmall; break;
-                case LayerType.LavaCascadeSmall: activeLayer = LayerType.LavaCascadeLarge; break;
-                default: activeLayer = LayerType.LavaBody;
+                case LayerType.Lava: activeLayer = LayerType.LavaFall; break;
+                default: activeLayer = LayerType.Lava;
             }
         }
         if (IsKeyPressed(KeyboardKey.KEY_S)) {
-            switch (activeLayer) {
-                case LayerType.Platform: activeLayer = LayerType.Support; break;
-                default: activeLayer = LayerType.Platform;
-            }
+        	activeLayer = LayerType.Platform;
         }
         if (IsKeyPressed(KeyboardKey.KEY_D)) { activeLayer = LayerType.Ladder; }
         //if (IsKeyPressed(KeyboardKey.KEY_T)) { activeLayer = LayerType.Torch; }
@@ -805,8 +820,8 @@ class TileMapEditor {
                     if (start.y > end.y) { swap(start.y, end.y); }
                     ++end.x;
                     ++end.y;
-                    DrawRectangleV(start.tileToWorldCoords, Vector2(8 * (end.x - start.x), 8 * (end.y - start.y)),
-                        fillLayer == LayerType.None ? BLACK : fillLayer.toColor);
+                    //DrawRectangleV(start.tileToWorldCoords, Vector2(8 * (end.x - start.x), 8 * (end.y - start.y)),
+                    //    fillLayer == LayerType.None ? BLACK : fillLayer.toColor);
                 }
                 // draw tile debug
                 auto tilePos = selectedTile.tileToWorldCoords();
