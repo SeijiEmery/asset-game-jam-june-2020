@@ -43,6 +43,7 @@ class TileMap(T = ubyte) {
         
         return getChunk(chunkIndex).get(cast(uint)tileIndex.x, cast(uint)tileIndex.y);
     }
+
     void getTileBoundsFromScreenCoords(Rectangle screen, ref const(Camera2D) camera, out TileIndex minima, out TileIndex maxima) {
         if (!bounds.initialized) {
             minima = maxima = TileIndex(0, 0);
