@@ -61,14 +61,22 @@ Color toColor (LayerType layer) {
 
 
 enum TileType {
-	Air 					= 0x0,
+	None 					= 0x0,
+	Air 					= 0x1,
 	WallGroundTop 			= 0x10,
 	WallGroundBtm 			= 0x11,
-	WallGroundSide			= 0x12,
-	WallGroundTopCorner 	= 0x13,
-	WallGroundBtmCorner 	= 0x14,
+	WallGroundSideL			= 0x12,
+	WallGroundSideR			= 0x112,
+
+	WallGroundTopCornerL 	= 0x13,
+	WallGroundTopCornerR 	= 0x113,
+
+	WallGroundBtmCornerL 	= 0x14,
+	WallGroundBtmCornerR 	= 0x114,
+
 	WallGroundInterior		= 0x15,
-	WallGroundSingleVertical = 0x16,
+
+	WallGroundSingleVertical 	= 0x16,
 	WallGroundSingleVerticalTop = 0x17,
 	WallGroundSingleVerticalBtm = 0x18,
 
@@ -83,19 +91,22 @@ enum TileType {
 	TorchBtm 				= 0x23,
 
 	Platform 					= 0x24,
-	PlatformPillar 				= 0x25,
-	PlatformWithSupportPillar 	= 0x26,
+	PlatformEdge 				= 0x26,
+	PlatformPillar 				= 0x27,
+	PlatformWithSupportPillar 	= 0x29,
 
-	CascadeOrigin 			= 0x01,
-	CascadeSmall 			= 0x02,
-	CascadeLarge 			= 0x03,
+	CascadeOrigin 			= 0x31,
+	CascadeSmall 			= 0x32,
+	CascadeLarge 			= 0x33,
 
-	CascadeImpactTop 		= 0x04,
-	CascadeImpactTopCorner  = 0x05,
+	CascadeImpactTop 		= 0x34,
+	CascadeImpactTopCornerL = 0x35,
+	CascadeImpactTopCornerR = 0x05,
 	CascadeImpactBtm		= 0x06,
 	CascadeImpactBtmCorner 	= 0x07,
+	CascadeImpactSmall      = 0x08,
 
-	FlipX 					= 0x40,
+	FlipX 					= 0x100,
 	VegetationFlag 			= 0x80,
 }
 enum BiomeType {
@@ -119,15 +130,15 @@ bool isFluid (LayerType layer) {
 	return (layer & LayerType.Fluid) != 0;
 }
 
-void generateTilesFirstPass (
+TileType generateTilesFirstPass (
 	TileMap!LayerType layer, TileMap!BiomeType biome, 
 	int x, int y,
-	TileMap!TileType outputTile, TileMap!BiomeType outputBiome
+	TileMap!BiomeType outputBiome
 ) {
-	writefln("generating (pass 1) for %s %s", x, y);
+	//writefln("generating (pass 1) for %s %s", x, y);
 	auto center = layer.get(x, y);
-	auto top 	= layer.get(x, y+1);
-	auto btm 	= layer.get(x, y-1);
+	auto top 	= layer.get(x, y-1);
+	auto btm 	= layer.get(x, y+1);
 	auto left   = layer.get(x-1, y);
 	auto right  = layer.get(x+1, y);
 
@@ -145,42 +156,136 @@ void generateTilesFirstPass (
 			//	}
 			//} else 
 			if (lg == rg) {
-				outputTile.get(x, y) = TileType.WallGroundTop;
-			} else if (lg) {
-				outputTile.get(x, y) = TileType.WallGroundTopCorner;
-			} else if (right.isGround) {
-				outputTile.get(x, y) = TileType.WallGroundTopCorner | TileType.FlipX;
+				return TileType.WallGroundTop;
+			} else if (!lg) {
+				return TileType.WallGroundTopCornerL;
+			} else {
+				return TileType.WallGroundTopCornerR;
 			}
 		} else if (!btm.isGround) {
 			if (lg == rg) {
-				outputTile.get(x, y) = TileType.WallGroundBtm;
+				return TileType.WallGroundBtm;
 			} else if (lg) {
-				outputTile.get(x, y) = TileType.WallGroundTopCorner;
+				return TileType.WallGroundBtmCornerR;
 			} else if (right.isGround) {
-				outputTile.get(x, y) = TileType.WallGroundTopCorner | TileType.FlipX;
+				return TileType.WallGroundBtmCornerL;
 			}
 		} else if (lg == rg) {
-			outputTile.get(x, y) = !lg ? TileType.WallGroundSingleVertical : TileType.WallGroundInterior;
+			return !lg ? TileType.WallGroundSingleVertical : TileType.WallGroundInterior;
 		} else {
-			outputTile.get(x, y) = !lg ? TileType.WallGroundSide :
-				TileType.WallGroundSide | TileType.FlipX;
+			return !lg ? TileType.WallGroundSideL :
+				TileType.WallGroundSideR;
 		}
 	} 
 	else if (center.isFluid) {
-		outputTile.get(x, y) = TileType.WallGroundInterior;
 		outputBiome.get(x, y) = (center & LayerType.Lava) ? BiomeType.Lava : BiomeType.Water;
+		switch (center) {
+			case LayerType.WaterCascadeSmall: case LayerType.LavaCascadeSmall:
+				if (btm.isFluid && (btm != LayerType.WaterCascadeSmall && btm != LayerType.LavaCascadeSmall)) {
+					return TileType.CascadeImpactSmall;
+				} else if (top == LayerType.WaterCascadeSmall || top == LayerType.LavaCascadeSmall) {
+					return TileType.CascadeSmall;
+				} else {
+					return TileType.CascadeOrigin;
+				}
+			case LayerType.LavaCascadeLarge: case LayerType.WaterCascadeLarge:
+				return TileType.CascadeLarge;
+			default:
+				if (!btm.isFluid) return TileType.WallGroundBtm;
+				if (!top.isFluid) return TileType.WallGroundTop;
+				return TileType.WallGroundInterior;
+		}
 	}
 	else {
-		outputTile.get(x, y) = TileType.Air;
+		switch (center) {
+			case LayerType.None: 
+				if (top == LayerType.Torch)
+					return TileType.TorchBtm;
+			return TileType.None;
+			
+			// air + torches
+			case LayerType.Air:   	
+				if (top == LayerType.Torch)
+					return TileType.TorchBtm;
+				return TileType.Air;
+			
+			case LayerType.Torch:  	
+				return TileType.TorchTop;
+			
+			// ladders
+			case LayerType.Ladder: 
+				return top == LayerType.Ladder 
+					? TileType.Ladder 
+					: TileType.LadderTop;
+			
+			// platforms + supports
+			case LayerType.Platform: 
+				return TileType.Platform;
+			case LayerType.Support: 
+				return TileType.PlatformPillar;
+
+			default: return TileType.Air;
+		}		
 	}
+	return TileType.None;
 }
-void renderTile (
-	TileMap!TileType tileTypes, TileMap!BiomeType biome,
-	int x, int y,
-	TileMap!uint tiles
+uint renderTile (
+	TileMap!TileType tileTypes, TileMap!BiomeType biomes,
+	int x, int y
 ) {
-	writefln("generating (final pass) for %s %s", x, y);
-	tiles.get(x, y) = 15;
+	import std.random;
+
+	auto tile = tileTypes.get(x, y);
+	auto biome = biomes.get(x, y);
+
+	switch (tile & ~TileType.FlipX) {
+		case TileType.None: 						return 0;
+		case TileType.Air: 							return 1;
+		case TileType.TorchTop: 					return 46;
+		case TileType.TorchBtm: 					return 54;
+		case TileType.LadderTop: 					return 47;
+		case TileType.Ladder: 	 					return 55;
+		case TileType.Platform: 	 				return 16;
+		case TileType.PlatformEdge: 	 			return 17 | (tile & TileType.FlipX);
+		case TileType.PlatformPillar: 	 			return 32 | (tile & TileType.FlipX);
+		case TileType.PlatformWithSupportPillar: 	return 24 | (tile & TileType.FlipX);
+		case TileType.CascadeOrigin: 				
+			return biome == BiomeType.Lava ? 73 : 69;
+		case TileType.CascadeSmall:
+			return biome == BiomeType.Lava ? 77 : 75;
+		case TileType.CascadeImpactSmall:
+			return biome == BiomeType.Lava ? 85 : 84;
+		case TileType.CascadeLarge:
+			return biome == BiomeType.Lava ? 77 : 74;
+		case TileType.CascadeImpactTop:
+			return biome == BiomeType.Lava ? 85 : 82;
+		case TileType.CascadeImpactTopCornerL: return 81;
+		case TileType.CascadeImpactTopCornerR: return 83;
+
+		default:
+			switch (biome) {
+				case BiomeType.Any: case BiomeType.Grass:
+					switch (tile) {
+						case TileType.WallGroundTop:	    return 0x0A;
+						case TileType.WallGroundBtm: 	    return 0x1A;
+						case TileType.WallGroundSideL: 	    return 0x11;
+						case TileType.WallGroundSideR: 	    return 0x111;
+						case TileType.WallGroundTopCornerL: return 0x09;
+						case TileType.WallGroundTopCornerR: return 0x109;
+						case TileType.WallGroundBtmCornerL: return 0x19;
+						case TileType.WallGroundBtmCornerR: return 0x119;
+						//case WallGroundSingleVertical: 
+						//case WallGroundSingleVerticalTop:
+						//case WallGroundSingleVerticalBtm:
+						case TileType.WallGroundInterior:  
+						default:				
+							return uniform01() < 0.2 ? 0x12 : 0x1;
+					}
+				default:
+			}
+			return 1;
+
+	}
 }
 
 
@@ -226,14 +331,42 @@ class RenderedTileMap {
 			dirtyDrawList ~= TileIndex(x, y);
 		}
 	}
+
+	private bool isDirty = false;
+
+	private void lazyRebuildAllTilesOnScreen(Camera2D camera) {
+		if (isDirty) {
+			isDirty = false;
+			rebuildAllTilesOnScreen(camera);
+		}
+	}
+	public void rebuildAllTilesOnScreen (Camera2D camera) {
+		isDirty = false;
+
+		TileIndex i0, i1;
+		editableLayers.getTileBoundsFromScreenCoords(Rectangle(500, 1500, 3000, 1500), camera, i0, i1);
+        for (int i = i0.x; i < i1.x; ++i) {
+            for (int j = i0.y; j < i1.y; ++j) {
+            	updateTileFirstPass(i, j, firstPassDirtyList);
+            }
+        }
+
+        foreach (tile; firstPassDirtyList) {
+			//writefln("processing dirty 2 %s %s", tile.x, tile.y);
+			updateTileSecondPass(tile.x, tile.y);
+		}
+		firstPassDirtyList.length = 0;
+	}
+
 	private void rebuildDirtyTiles () {
+		isDirty = true;
 		foreach (tile; dirtyDrawList) {
-			writefln("processing dirty %s %s", tile.x, tile.y);
+			//writefln("processing dirty %s %s", tile.x, tile.y);
 			updateTileFirstPass(tile.x, tile.y, firstPassDirtyList);
 		}
 		dirtyDrawList.length = 0;
 		foreach (tile; firstPassDirtyList) {
-			writefln("processing dirty 2 %s %s", tile.x, tile.y);
+			//writefln("processing dirty 2 %s %s", tile.x, tile.y);
 			updateTileSecondPass(tile.x, tile.y);
 		}
 		firstPassDirtyList.length = 0;
@@ -241,20 +374,23 @@ class RenderedTileMap {
 	private void drawRect(FillMode mode, T)(int x, int y, uint w, uint h, T value) {
 		forEachRect!((i, j) {
 			if (drawPt!mode(i, j, value)) {
-				markDirty(i-1, j);
-				markDirty(i+1, j);
-			} else {
-				markDirty(i, j);
-			}
+				//markDirty(i-1, j);
+				//markDirty(i+1, j);
+			} 
+			//else {
+			//	markDirty(i, j);
+			//}
 		})(x, y, w, h);
-		foreach (k; x .. x + w) {
-			markDirty(k, y - 1);
-			markDirty(k, y + h + 1);
-		}
+
+		forEachRect!((i, j) { markDirty(i, j); })(x - 10, y - 10, w + 20, h + 20);
+		//foreach (k; x - 1 .. x + w + 1) {
+		//	markDirty(k, y - 1);
+		//	markDirty(k, y + h + 1);
+		//}
 		rebuildDirtyTiles();
 	}
 	void drawRect (T)(int x, int y, uint w, uint h, T value, FillMode drawMode) {
-		writefln("drawing rect at %s, %s: %s x %s", x, y, w, h);
+		writefln("drawing rect at %s, %s: %s x %s with mode %s", x, y, w, h, drawMode);
 		final switch (drawMode) {
 			case FillMode.Default:
 				drawRect!(FillMode.Default)(x, y, w, h, value);
@@ -309,13 +445,13 @@ class RenderedTileMap {
 	private void updateTileFirstPass(int x, int y, ref TileIndex[] dirtyTiles) {
 		auto prevTile = firstPassTiles.get(x, y);
 		auto prevBiome = drawnBiome.get(x, y);
-		generateTilesFirstPass(editableLayers, editableBiomes, x, y, firstPassTiles, drawnBiome);
+		firstPassTiles.get(x, y) = generateTilesFirstPass(editableLayers, editableBiomes, x, y, drawnBiome);
 		if (prevTile != firstPassTiles.get(x, y) || prevBiome != drawnBiome.get(x, y)) {
 			dirtyTiles ~= TileIndex(x, y);
 		}
 	}
 	private void updateTileSecondPass(int x, int y) {
-		renderTile(firstPassTiles, drawnBiome, x, y, tilemap);
+		tilemap.get(x, y) = renderTile(firstPassTiles, drawnBiome, x, y);
 	}
 
 	auto getTileBoundsFromScreenCoords (Args...)(Args args) {
@@ -329,18 +465,20 @@ interface TileOperation {
 class DrawTilePointOperation(T : LayerType) : TileOperation {
 	int x, y;
 	T value, prevValue = LayerType.None;
+	FillMode drawMode;
 
-	this (int x, int y, T value) {
+	this (int x, int y, T value, FillMode drawMode) {
 		this.value = value;
 		this.x = x;
 		this.y = y;
+		this.drawMode = drawMode;
 	}
 	void execute(RenderedTileMap tilemap) {
 		tilemap.get(x, y, prevValue);
-		tilemap.drawPoint(x, y, value);
+		tilemap.drawPoint(x, y, value, drawMode);
 	}
 	void unexecute(RenderedTileMap tilemap) {
-		tilemap.drawPoint(x, y, prevValue);
+		tilemap.drawPoint(x, y, prevValue, drawMode);
 	}
 }
 class DrawTileRectOperation(T : LayerType) : TileOperation {
@@ -400,20 +538,21 @@ class TileMapEditor {
 	size_t operationIndex;
 
 	this () { load(); }
-	~this() { save(); }
 
 	void drawPoint(T)(TileIndex pos, T value, FillMode drawMode = FillMode.Default) {
+		writefln("draw point, mode %s", drawMode);
 		T tile;
 		tilemap.get(pos.x, pos.y, tile);
 		if (tile != value && (drawMode != FillMode.FillEmpty || !tile)) {
 			if (value.drawWithCascade) {
 				executeOp(new DrawTileCascade!T(pos.x, pos.y, value, drawMode));
 			} else {
-				executeOp(new DrawTilePointOperation!T(pos.x, pos.y, value));
+				executeOp(new DrawTilePointOperation!T(pos.x, pos.y, value, drawMode));
 			}
 		}
 	}
 	void drawRect(T)(TileIndex a, TileIndex b, T value, FillMode drawMode = FillMode.Default) {
+		writefln("draw rect, mode %s", drawMode);
 		import std.algorithm: swap;
 		if (a.x > b.x) swap(a.x, b.x);
 		if (a.y > b.y) swap(a.y, b.y);
@@ -451,12 +590,26 @@ class TileMapEditor {
 		}
 	}
 	public void save () {
-		writefln("saving... (TBD)");
+		import std.file;
+		writefln("saving...");
+		write("mapdata.layers", cast(void[])tilemap.editableLayers.save);
+		write("mapdata.biomes", cast(void[])tilemap.editableBiomes.save);
+		writefln("finished writing save file");
 	}
+	bool needsRebuild = false;
 	public void load () {
-		writefln("loading... (TBD)");
+		import std.file;
+		writefln("loading...");
+		if (exists("mapdata.layers") && exists("mapdata.biomes")) {
+			tilemap.editableLayers.load(cast(ubyte[])read("mapdata.layers"));
+			tilemap.editableBiomes.load(cast(ubyte[])read("mapdata.biomes"));
+			needsRebuild = true;
+			writefln("finished loading save file");
+		} else {
+			writefln("no save file(s)");
+		}
 	}
-	public void update() {
+	public void update(Camera2D camera) {
 		// implement undo / redo hotkeys
 		version(OSX) {
 			auto cmdDown = IsKeyDown(KeyboardKey.KEY_LEFT_SUPER) || IsKeyDown(KeyboardKey.KEY_RIGHT_SUPER);
@@ -474,6 +627,13 @@ class TileMapEditor {
 			if (IsKeyPressed(KeyboardKey.KEY_S)) {
 				save();
 			}
+			if (IsKeyPressed(KeyboardKey.KEY_O)) {
+				load();
+			}
+		}
+		if (needsRebuild) {
+			needsRebuild = false;
+			tilemap.rebuildAllTilesOnScreen(camera);
 		}
 	}
 
@@ -553,18 +713,20 @@ class TileMapEditor {
     TileIndex fillShapeBeginPos;
     TileIndex fillShapeEndPos;
     LayerType fillLayer;
+    FillMode drawingFillMode;
     size_t opCountAtStart;
 
-    private void beginDrawingRect(TileIndex start, LayerType layer) {
+    private void beginDrawingRect(TileIndex start, LayerType layer, FillMode mode) {
         drawingRectFillShape = true;
         fillShapeBeginPos = fillShapeEndPos = start;
         fillLayer = layer;
         opCountAtStart = operationIndex;
+        drawingFillMode = mode;
     }
     private void endDrag() {
         drawingRectFillShape = false;
         operationIndex = opCountAtStart;
-        drawRect(fillShapeBeginPos, fillShapeEndPos, fillLayer);
+        drawRect(fillShapeBeginPos, fillShapeEndPos, fillLayer, drawingFillMode);
     }
     private void drawTileEditor(Camera2D camera) {
         const int FOREGROUND_BACKGROUND_SCALE = 2;
@@ -588,21 +750,21 @@ class TileMapEditor {
         TileIndex i0, i1;
         tilemap.editableLayers.getTileBoundsFromScreenCoords(Rectangle(0, 1080, 1920, 1080), camera, i0, i1);
 
-        //msg ~= format("\ngot bounds: %s %s", i0, i1);
-        //msg ~= format("\nbounds: %s", roomLayerMap.bounds);
-        //msg ~= format("\nchunk bounds: %s", roomLayerMap.chunkBounds);
+        ////msg ~= format("\ngot bounds: %s %s", i0, i1);
+        ////msg ~= format("\nbounds: %s", roomLayerMap.bounds);
+        ////msg ~= format("\nchunk bounds: %s", roomLayerMap.chunkBounds);
 
-        for (int i = i0.x; i < i1.x; ++i) {
-            for (int j = i0.y; j < i1.y; ++j) {
-            	LayerType tile;
-            	tilemap.get(i, j, tile);
-                if (tile != LayerType.None) {
-                	auto color = tile.toColor;
-                	color.a = 50;
-                    DrawRectangleV(tileToWorldCoords(TileIndex(i, j)), Vector2(8, 8), color);
-                }
-            }
-        }
+        //for (int i = i0.x; i < i1.x; ++i) {
+        //    for (int j = i0.y; j < i1.y; ++j) {
+        //    	LayerType tile;
+        //    	tilemap.get(i, j, tile);
+        //        if (tile != LayerType.None) {
+        //        	auto color = tile.toColor;
+        //        	color.a = 50;
+        //            DrawRectangleV(tileToWorldCoords(TileIndex(i, j)), Vector2(8, 8), color);
+        //        }
+        //    }
+        //}
         auto w0 = i0.tileToWorldCoords;
         auto w1 = i1.tileToWorldCoords;
         DrawRectangleLinesEx(Rectangle(w0.x, w0.y, w1.x - w0.x, w1.y - w0.y), 1, WHITE);
@@ -622,10 +784,10 @@ class TileMapEditor {
                 break;
             case DrawMode.Rect:
                 if (MouseUI.beginDrag(MouseButton.MOUSE_LEFT_BUTTON, null, &endDrag)) {
-                    beginDrawingRect(selectedTile, activeLayer);
+                    beginDrawingRect(selectedTile, activeLayer, fillMode);
                 }
                 else if (MouseUI.beginDrag(MouseButton.MOUSE_RIGHT_BUTTON, null, &endDrag)) {
-                    beginDrawingRect(selectedTile, LayerType.None);
+                    beginDrawingRect(selectedTile, LayerType.None, FillMode.Default);
                 }
                 if (drawingRectFillShape) {
                     import std.algorithm: swap;
@@ -689,18 +851,22 @@ class TileMapRenderer {
             for (int j = i0.y; j < i1.y; ++j) {
             	auto tileIndex = tilemap.tilemap.get(i, j);
                 if (tileIndex > 0) {
+                	int flipXW = 8;
+                	if ((tileIndex & 0x100) != 0) {
+                		tileIndex &= ~0x100;
+                		flipXW = -flipXW;
+                	}
+                	--tileIndex;
                 	auto tx = tileIndex % tilemapWidth, ty = tileIndex / tilemapWidth;
                 	if (ty >= tilemapHeight) {
                 		DrawRectangleV(tileToWorldCoords(TileIndex(i, j)), Vector2(8, 8), PINK);
                 	} else {
-                		DrawTextureRec(tilemapTexture, Rectangle(tx, ty, 8, 8), tileToWorldCoords(TileIndex(i, j)), WHITE);
+                		//writefln("rendering %s => %s %s", tileIndex, tx, ty);
+                		DrawTextureRec(tilemapTexture, Rectangle(tx * 8, ty * 8, flipXW, 8), tileToWorldCoords(TileIndex(i, j)), WHITE);
                 	}
-                } else {
-                	DrawRectangleV(tileToWorldCoords(TileIndex(i, j)), Vector2(8, 8), LIME);
                 }
             }
         }
-
 		EndMode2D();
 	}
 }
@@ -724,19 +890,24 @@ void main() {
 		writefln("no gamepad present!!");
 	}
 
+	size_t counter = 0;
+
 	while (!WindowShouldClose()) {
 		MouseUI.beginFrame();
 		editor.renderUI();
 
+		auto camera = cam.camera;
+		//if (++counter % 15 == 0) {
+		//	editor.tilemap.lazyRebuildAllTilesOnScreen(camera);
+		//}
 		//tileEditor.renderUI();
 
 		player.update();
 		cam.update();
-		editor.update();
+		editor.update(cam.camera);
 
 		BeginDrawing();
 		ClearBackground(BLACK);
-		auto camera = cam.camera;
 
 		// draw tiles
 		tileRenderer.render(camera);

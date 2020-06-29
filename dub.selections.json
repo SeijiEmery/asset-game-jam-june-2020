@@ -5,10 +5,13 @@
 		"bindbc-loader": "0.2.1",
 		"bindbc-nuklear": "0.4.3",
 		"bindbc-raylib": "0.5.0",
+		"cerealed": "0.6.11",
+		"concepts": "0.0.8",
 		"derelict-imgui": "0.10.0",
 		"derelict-util": "2.0.6",
 		"dimgui": "1.0.3",
 		"draygui": "0.1.0",
-		"raylib-d": "3.0.2"
+		"raylib-d": "3.0.2",
+		"unit-threaded": "0.7.55"
 	}
 }

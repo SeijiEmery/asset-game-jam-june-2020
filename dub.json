@@ -2,11 +2,39 @@
 	"authors": [
 		"Seiji Emery"
 	],
+	"configurations": [
+		{
+			"mainSourceFile": "tests/editor.d",
+			"name": "editor",
+			"targetType": "executable"
+		},
+		{
+			"mainSourceFile": "tests/sprite_test.d",
+			"name": "sprite-test",
+			"targetType": "executable"
+		},
+		{
+			"mainSourceFile": "tests/ui_test.d",
+			"name": "ui-test",
+			"targetType": "executable"
+		},
+		{
+			"mainSourceFile": "tests/palletize.d",
+			"name": "palletize",
+			"targetType": "executable"
+		},
+		{
+			"mainSourceFile": "tests/find_tiles.d",
+			"name": "find-tiles",
+			"targetType": "executable"
+		}
+	],
 	"copyright": "Copyright © 2020, Seiji Emery",
 	"dependencies": {
 		"bindbc-glfw": "~>0.9.0",
 		"bindbc-loader": "~>0.2.1",
 		"bindbc-nuklear": "~>0.4.3",
+		"cerealed": "~>0.6.11",
 		"derelict-imgui": "~>0.10.0",
 		"dimgui": "~>1.0.3",
 		"draygui": "~>0.1.0",
@@ -18,32 +46,5 @@
 		"nuklear"
 	],
 	"license": "proprietary",
-	"name": "agj2020",
-	"configurations": [
-		{
-			"name": "editor",
-			"targetType": "executable",
-			"mainSourceFile": "tests/editor.d",
-		},
-		{
-			"name": "sprite-test",
-			"targetType": "executable",
-			"mainSourceFile": "tests/sprite_test.d",
-		},
-		{
-			"name": "ui-test",
-			"targetType": "executable",
-			"mainSourceFile": "tests/ui_test.d",
-		},
-		{
-			"name": "palletize",
-			"targetType": "executable",
-			"mainSourceFile": "tests/palletize.d",
-		},
-		{
-			"name": "find-tiles",
-			"targetType": "executable",
-			"mainSourceFile": "tests/find_tiles.d",
-		},
-	]
+	"name": "agj2020"
 }

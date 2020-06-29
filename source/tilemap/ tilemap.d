@@ -4,7 +4,7 @@ import raylib;
 import std.exception: enforce;
 import std.format: format;
 import agj.tilemap.coords;
-
+import cerealed;
 
 // 64 x 64 chunks
 struct TileChunk(T = ubyte) {
@@ -55,5 +55,38 @@ class TileMap(T = ubyte) {
         if (minima.y > bounds.minBoundY) minima.y = bounds.minBoundY;
         if (maxima.y < bounds.maxBoundY) maxima.y = bounds.maxBoundY;
         maxima = screenToTileCoords(Vector2(screen.x + screen.width, screen.y + screen.y), camera);
+    }
+}
+
+struct SavedMapData(T) {
+    struct MapChunk {
+        TileIndex   index;
+        TileChunk!T chunkData;
+    }
+    AABB!int bounds;
+    AABB!int chunkBounds;
+    MapChunk[] chunks;
+}
+
+ubyte[] save (T)(TileMap!T tilemap) {
+    import std.algorithm;
+    import std.array;
+
+    SavedMapData!T data;
+    data.bounds = tilemap.bounds;
+    data.chunkBounds = tilemap.chunkBounds;
+    data.chunks = tilemap.chunks.byKeyValue
+        .map!((kv) => SavedMapData!T.MapChunk(kv.key, kv.value))
+        .array;
+    return data.cerealise;
+}
+
+void load (T)(TileMap!T map, ubyte[] bytes) {
+    auto data = decerealize!(SavedMapData!T)(bytes);
+    map.bounds = data.bounds;
+    map.chunkBounds = data.chunkBounds;
+    map.chunks.clear();
+    foreach (chunk; data.chunks) {
+        map.chunks[chunk.index] = chunk.chunkData;
     }
 }
