@@ -124,6 +124,7 @@ void generateTilesFirstPass (
 	int x, int y,
 	TileMap!TileType outputTile, TileMap!BiomeType outputBiome
 ) {
+	writefln("generating (pass 1) for %s %s", x, y);
 	auto center = layer.get(x, y);
 	auto top 	= layer.get(x, y+1);
 	auto btm 	= layer.get(x, y-1);
@@ -178,7 +179,8 @@ void renderTile (
 	int x, int y,
 	TileMap!uint tiles
 ) {
-
+	writefln("generating (final pass) for %s %s", x, y);
+	tiles.get(x, y) = 15;
 }
 
 
@@ -200,7 +202,7 @@ class RenderedTileMap {
 	TileIndex[]	dirtyDrawList; 
 	TileIndex[] firstPassDirtyList;
 
-	bool drawPt (FillMode drawMode = FillMode.Default)(int x, int y, LayerType value) {
+	private bool drawPt (FillMode drawMode = FillMode.Default)(int x, int y, LayerType value) {
 		writefln("drawing %s at %s, %s", value, x, y);
 		static if (drawMode == FillMode.FillEmpty) {
 			if (editableLayers.get(x, y) != LayerType.None) {
@@ -216,6 +218,9 @@ class RenderedTileMap {
 		}
 		return false;
 	}
+	void drawPoint (int x, int y, LayerType value, FillMode drawMode = FillMode.Default) {
+		drawRect(x, y, 1, 1, value, drawMode);
+	}
 	private void markDirty (int x, int y) {
 		if (editableLayers.get(x, y)) {
 			dirtyDrawList ~= TileIndex(x, y);
@@ -223,10 +228,12 @@ class RenderedTileMap {
 	}
 	private void rebuildDirtyTiles () {
 		foreach (tile; dirtyDrawList) {
+			writefln("processing dirty %s %s", tile.x, tile.y);
 			updateTileFirstPass(tile.x, tile.y, firstPassDirtyList);
 		}
 		dirtyDrawList.length = 0;
 		foreach (tile; firstPassDirtyList) {
+			writefln("processing dirty 2 %s %s", tile.x, tile.y);
 			updateTileSecondPass(tile.x, tile.y);
 		}
 		firstPassDirtyList.length = 0;
@@ -330,10 +337,10 @@ class DrawTilePointOperation(T : LayerType) : TileOperation {
 	}
 	void execute(RenderedTileMap tilemap) {
 		tilemap.get(x, y, prevValue);
-		tilemap.drawPt(x, y, value);
+		tilemap.drawPoint(x, y, value);
 	}
 	void unexecute(RenderedTileMap tilemap) {
-		tilemap.drawPt(x, y, prevValue);
+		tilemap.drawPoint(x, y, prevValue);
 	}
 }
 class DrawTileRectOperation(T : LayerType) : TileOperation {
@@ -590,7 +597,9 @@ class TileMapEditor {
             	LayerType tile;
             	tilemap.get(i, j, tile);
                 if (tile != LayerType.None) {
-                    DrawRectangleV(tileToWorldCoords(TileIndex(i, j)), Vector2(8, 8), tile.toColor);
+                	auto color = tile.toColor;
+                	color.a = 50;
+                    DrawRectangleV(tileToWorldCoords(TileIndex(i, j)), Vector2(8, 8), color);
                 }
             }
         }
@@ -665,15 +674,36 @@ class TileMapRenderer {
 		this.tilemap = tilemap;
 		this.tilemapTexture = LoadTexture("assets/tiles/tiles.png");
 	}
-
 	void render (Camera2D camera) {
+		// correct for smaller tileset
+		camera.zoom *= 2;
+		camera.target.x /= 2;
+		camera.target.y /= 2;
+
 		BeginMode2D(camera);
+		TileIndex i0, i1;
+		auto tilemapWidth  = tilemapTexture.width / 8;
+		auto tilemapHeight = tilemapTexture.height / 8;
+        tilemap.tilemap.getTileBoundsFromScreenCoords(Rectangle(0, 1080, 1920, 1080), camera, i0, i1);
+        for (int i = i0.x; i < i1.x; ++i) {
+            for (int j = i0.y; j < i1.y; ++j) {
+            	auto tileIndex = tilemap.tilemap.get(i, j);
+                if (tileIndex > 0) {
+                	auto tx = tileIndex % tilemapWidth, ty = tileIndex / tilemapWidth;
+                	if (ty >= tilemapHeight) {
+                		DrawRectangleV(tileToWorldCoords(TileIndex(i, j)), Vector2(8, 8), PINK);
+                	} else {
+                		DrawTextureRec(tilemapTexture, Rectangle(tx, ty, 8, 8), tileToWorldCoords(TileIndex(i, j)), WHITE);
+                	}
+                } else {
+                	DrawRectangleV(tileToWorldCoords(TileIndex(i, j)), Vector2(8, 8), LIME);
+                }
+            }
+        }
 
 		EndMode2D();
 	}
 }
-
-
 
 void main() {
 	int screenWidth = 1920, screenHeight = 1080;
@@ -710,7 +740,6 @@ void main() {
 
 		// draw tiles
 		tileRenderer.render(camera);
-
 		editor.render(camera);
 
 		// draw sprites
