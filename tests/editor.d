@@ -185,9 +185,9 @@ void renderTile (
 enum FillMode { Default, FillEmpty }
 
 void forEachRect(alias cb)(int x, int y, uint w, uint h) {
-	for (; h > 0; ++y, --h) {
-		for (; w > 0; ++x, --w) {
-			cb(x, y);
+	for (int i = 0; i < w; ++i) {
+		for (int j = 0; j < h; ++j) {
+			cb(x + i, y + j);
 		}
 	}
 }
@@ -247,6 +247,7 @@ class RenderedTileMap {
 		rebuildDirtyTiles();
 	}
 	void drawRect (T)(int x, int y, uint w, uint h, T value, FillMode drawMode) {
+		writefln("drawing rect at %s, %s: %s x %s", x, y, w, h);
 		final switch (drawMode) {
 			case FillMode.Default:
 				drawRect!(FillMode.Default)(x, y, w, h, value);
@@ -257,6 +258,8 @@ class RenderedTileMap {
 		}
 	}
 	void drawRect (T)(int x, int y, int w, int h, T[] values) {
+		writefln("drawing rect at %s, %s: %s x %s", x, y, w, h);
+
 		assert(values.length == w * h, format("invalid length: %s != %s x %s", values.length, w, h));
 		T* next = &values[0];
 		forEachRect!((i, j) {
@@ -289,6 +292,7 @@ class RenderedTileMap {
 		while (editableLayers.get(x, end) && !editableLayers.get(x, end).isGround) {
 			++end;
 		}
+		writefln("drawing cascade at %s %s -> cascaded to %s (length %s)", x, y, end, end - y);
 		getRect(x, y, 1, end - y, prevValues);
 		drawRect(x, y, 1, end - y, value, drawMode);
 	}
@@ -362,15 +366,26 @@ class DrawTileCascade(T : LayerType) : TileOperation {
 		this.value = value; this.drawMode = drawMode;
 	}
 	void execute(RenderedTileMap tilemap) {
-		tilemap.drawCascade(x, y, value, prevValues);
+		tilemap.drawCascade(x, y, value, drawMode, prevValues);
 	}
 	void unexecute(RenderedTileMap tilemap) {
-		tilemap.undrawCascade(prevValues);
+		tilemap.undrawCascade(x, y, prevValues);
 	}
 }
 void erase(TileMap!LayerType tilemap, int i, int j) {
 	tilemap.get(i, j) = LayerType.None;
 }
+bool drawWithCascade (LayerType layerType) {
+	switch (layerType) {
+		case LayerType.WaterCascadeSmall:
+		case LayerType.LavaCascadeSmall:
+		case LayerType.WaterCascadeLarge:
+		case LayerType.LavaCascadeLarge:
+		case LayerType.Ladder: return true;
+		default: return false;
+	}
+}
+
 
 class TileMapEditor {
 	public RenderedTileMap tilemap = new RenderedTileMap();
@@ -384,7 +399,11 @@ class TileMapEditor {
 		T tile;
 		tilemap.get(pos.x, pos.y, tile);
 		if (tile != value && (drawMode != FillMode.FillEmpty || !tile)) {
-			executeOp(new DrawTilePointOperation!T(pos.x, pos.y, value));
+			if (value.drawWithCascade) {
+				executeOp(new DrawTileCascade!T(pos.x, pos.y, value, drawMode));
+			} else {
+				executeOp(new DrawTilePointOperation!T(pos.x, pos.y, value));
+			}
 		}
 	}
 	void drawRect(T)(TileIndex a, TileIndex b, T value, FillMode drawMode = FillMode.Default) {
@@ -395,6 +414,8 @@ class TileMapEditor {
 		auto x = a.x, y = a.y;
 		auto w = b.x - a.x, h = b.y - a.y;
 		assert(w >= 0 && h >= 0);
+		++w;
+		++h;
 
 		executeOp(new DrawTileRectOperation!T(x, y, cast(uint)w, cast(uint)h, value, drawMode));
 	}
