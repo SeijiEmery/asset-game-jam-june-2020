@@ -1,6 +1,6 @@
 # Asset Game Jam 2020
 
-Small platformer / roguelike built from scratch (hopefully) over a weekend using raylib + nuklear + D standard libs.
+Small game-from-scratch turned half-game-and-level-editor-from-scratch built over a few days for a game jam built around these art assets:
 
 ## Assets:
 
