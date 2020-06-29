@@ -91,7 +91,8 @@ enum TileType {
 	TorchBtm 				= 0x23,
 
 	Platform 					= 0x24,
-	PlatformEdge 				= 0x26,
+	PlatformEdgeL 				= 0x26,
+	PlatformEdgeR 				= 0x126,
 	PlatformPillar 				= 0x27,
 	PlatformWithSupportPillar 	= 0x29,
 
@@ -219,8 +220,13 @@ TileType generateTilesFirstPass (
 					: TileType.LadderTop;
 			
 			// platforms + supports
-			case LayerType.Platform: 
-				return TileType.Platform;
+			case LayerType.Platform:
+				if (btm == LayerType.Platform || top == LayerType.Platform)
+					return left == LayerType.Platform || right == LayerType.Platform || (top != LayerType.Platform && !top.isGround) ?
+						TileType.PlatformWithSupportPillar : TileType.PlatformPillar;
+				return left.isGround ? TileType.PlatformEdgeL 
+					: right.isGround ? TileType.PlatformEdgeR
+					: TileType.Platform;
 			case LayerType.Support: 
 				return TileType.PlatformPillar;
 
@@ -238,17 +244,18 @@ uint renderTile (
 	auto tile = tileTypes.get(x, y);
 	auto biome = biomes.get(x, y);
 
-	switch (tile & ~TileType.FlipX) {
+	switch (tile) {
 		case TileType.None: 						return 0;
 		case TileType.Air: 							return 1;
 		case TileType.TorchTop: 					return 46;
 		case TileType.TorchBtm: 					return 54;
 		case TileType.LadderTop: 					return 47;
 		case TileType.Ladder: 	 					return 55;
-		case TileType.Platform: 	 				return 16;
-		case TileType.PlatformEdge: 	 			return 17 | (tile & TileType.FlipX);
-		case TileType.PlatformPillar: 	 			return 32 | (tile & TileType.FlipX);
-		case TileType.PlatformWithSupportPillar: 	return 24 | (tile & TileType.FlipX);
+		case TileType.Platform: 	 				return 15;
+		case TileType.PlatformEdgeL: 	 			return 0x110;
+		case TileType.PlatformEdgeR: 	 			return 0x10;
+		case TileType.PlatformPillar: 	 			return 31;
+		case TileType.PlatformWithSupportPillar: 	return 23;
 		case TileType.CascadeOrigin: 				
 			return biome == BiomeType.Lava ? 73 : 69;
 		case TileType.CascadeSmall:
