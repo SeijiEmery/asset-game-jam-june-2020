@@ -40,5 +40,10 @@
 			"targetType": "executable",
 			"mainSourceFile": "tests/palletize.d",
 		},
+		{
+			"name": "find-tiles",
+			"targetType": "executable",
+			"mainSourceFile": "tests/find_tiles.d",
+		},
 	]
 }
