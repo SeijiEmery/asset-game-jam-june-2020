@@ -201,8 +201,10 @@ class RenderedTileMap {
 	TileIndex[] firstPassDirtyList;
 
 	bool drawPt (FillMode drawMode = FillMode.Default)(int x, int y, LayerType value) {
+		writefln("drawing %s at %s, %s", value, x, y);
 		static if (drawMode == FillMode.FillEmpty) {
 			if (editableLayers.get(x, y) != LayerType.None) {
+				writefln("skipping due to fill mode");
 				return false;
 			}
 		}
@@ -405,16 +407,19 @@ class TileMapEditor {
 		if (operationIndex < operations.length) {
 			operations.length = operationIndex;
 		}
+		writefln("executing operation %s: %s", operations.length, operation);
 		operations ~= operation;
 		operationIndex = operations.length;
 	}
 	public void undo () {
 		if (operationIndex > 0) {
+			writefln("undoing operation %s: %s", operationIndex - 1, operations[operationIndex-1]);
 			operations[--operationIndex].unexecute(tilemap);
 		}
 	}
 	public void redo () {
-		if (operationIndex > 0) {
+		if (operationIndex > 0 && operationIndex < operations.length) {
+			writefln("redoing operation %s: %s", operationIndex, operations[operationIndex]);
 			operations[operationIndex++].execute(tilemap);
 		}
 	}
