@@ -381,12 +381,11 @@ class TileMapEditor {
 	~this() { save(); }
 
 	void drawPoint(T)(TileIndex pos, T value, FillMode drawMode = FillMode.Default) {
-		if (drawMode == FillMode.FillEmpty) {
-			T tile;
-			tilemap.get(pos.x, pos.y, tile);
-			if (tile) { return; }
+		T tile;
+		tilemap.get(pos.x, pos.y, tile);
+		if (tile != value && (drawMode != FillMode.FillEmpty || !tile)) {
+			executeOp(new DrawTilePointOperation!T(pos.x, pos.y, value));
 		}
-		executeOp(new DrawTilePointOperation!T(pos.x, pos.y, value));
 	}
 	void drawRect(T)(TileIndex a, TileIndex b, T value, FillMode drawMode = FillMode.Default) {
 		import std.algorithm: swap;
@@ -418,7 +417,7 @@ class TileMapEditor {
 		}
 	}
 	public void redo () {
-		if (operationIndex > 0 && operationIndex < operations.length) {
+		if (operationIndex >= 0 && operationIndex < operations.length) {
 			writefln("redoing operation %s: %s", operationIndex, operations[operationIndex]);
 			operations[operationIndex++].execute(tilemap);
 		}
@@ -437,7 +436,7 @@ class TileMapEditor {
 			auto cmdDown = IsKeyDown(KeyboardKey.KEY_LEFT_CTRL) || IsKeyDown(KeyboardKey.KEY_RIGHT_CTRL);
 		}
 		if (cmdDown) { 
-			if (IsKeyPressed(KeyboardKey.KEY_Z)) {
+			if (IsKeyDown(KeyboardKey.KEY_Z)) {
 				if (IsKeyDown(KeyboardKey.KEY_LEFT_SHIFT) || IsKeyDown(KeyboardKey.KEY_RIGHT_SHIFT)) {
 					redo();
 				} else {
@@ -559,7 +558,7 @@ class TileMapEditor {
 
         // draw tile layers
         TileIndex i0, i1;
-        tilemap.getTileBoundsFromScreenCoords(Rectangle(0, 1080, 1920, 1080), camera, i0, i1);
+        tilemap.editableLayers.getTileBoundsFromScreenCoords(Rectangle(0, 1080, 1920, 1080), camera, i0, i1);
 
         //msg ~= format("\ngot bounds: %s %s", i0, i1);
         //msg ~= format("\nbounds: %s", roomLayerMap.bounds);
@@ -583,6 +582,7 @@ class TileMapEditor {
             case DrawMode.Point:
                 if (MouseUI.buttonDown(MouseButton.MOUSE_LEFT_BUTTON)) {
                 	drawPoint(selectedTile, activeLayer, fillMode);
+                	//tilemap.drawPt(selectedTile.x, selectedTile.y, activeLayer);
                 } else if (MouseUI.buttonDown(MouseButton.MOUSE_RIGHT_BUTTON)) {
                 	drawPoint(selectedTile, LayerType.None);
                 }
